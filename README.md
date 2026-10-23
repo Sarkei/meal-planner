@@ -1,78 +1,100 @@
-## Introduction
+# meal-planner
 
-This is a simple pipeline example for a .NET Core application, showing just
-how easy it is to get up and running with .NET development using GitLab.
+Privates Repository `Sarkei/meal-planner`. Der Inhalt besteht aus dem
+unveränderten GitLab-Template für .NET-Core-Projekte (`dotNET-Core.gitlab-ci.yml`).
+Es gibt keinen Code, der Mahlzeiten plant: keine Rezepte, keine Datenhaltung,
+keine Oberfläche. Das Repository dient derzeit ausschließlich als Gerüst, um
+eine .NET-Konsolenanwendung samt CI-Pipeline aufzusetzen.
 
-# Reference links
+## Funktionen
 
-- [GitLab CI Documentation](https://docs.gitlab.com/ee/ci/)
-- [.NET Hello World tutorial](https://dotnet.microsoft.com/learn/dotnet/hello-world-tutorial/)
-
-If you're new to .NET you'll want to check out the tutorial, but if you're
-already a seasoned developer considering building your own .NET app with GitLab,
-this should all look very familiar.
-
-## What's contained in this project
-
-The root of the repository contains the out of the `dotnet new console` command,
-which generates a new console application that just prints out "Hello, World."
-It's a simple example, but great for demonstrating how easy GitLab CI is to
-use with .NET. Check out the `Program.cs` and `dotnetcore.csproj` files to
-see how these work.
-
-In addition to the .NET Core content, there is a ready-to-go `.gitignore` file
-sourced from the the .NET Core [.gitignore](https://github.com/dotnet/core/blob/master/.gitignore). This
-will help keep your repository clean of build files and other configuration.
-
-Finally, the `.gitlab-ci.yml` contains the configuration needed for GitLab
-to build your code. Let's take a look, section by section.
-
-First, we note that we want to use the official Microsoft .NET SDK image
-to build our project.
+Der gesamte Anwendungscode steht in `Program.cs` und gibt eine Zeile auf der
+Konsole aus:
 
 ```
-image: microsoft/dotnet:latest
+Hello World!
 ```
 
-We're defining two stages here: `build`, and `test`. As your project grows
-in complexity you can add more of these.
+Mehr passiert nicht. Es werden keine Argumente ausgewertet, keine Dateien
+gelesen oder geschrieben, keine Netzwerkverbindung aufgebaut. Die Pipeline
+baut und testet dieses Programm, mehr nicht.
+
+## Technik
+
+Angaben aus `dotnetcore.csproj` und `.gitlab-ci.yml`:
+
+| Merkmal | Wert |
+| --- | --- |
+| Projekt-SDK | `Microsoft.NET.Sdk` |
+| Ausgabetyp | `Exe` (Konsolenanwendung) |
+| Zielframework | `net7.0` |
+| Sprache | C# (`namespace dotnetcore`) |
+| Externe Pakete | keine |
+| CI-Image | `mcr.microsoft.com/dotnet/sdk:7.0` |
+| CI-Stages | `build`, `test`, `deploy` |
+| Gitpod-Image | `gitpod/workspace-dotnet` |
+
+Die CI cached `obj/project.assets.json`, die NuGet-Metadaten und das
+Verzeichnis `.nuget`. `deploy` ist ein Platzhalter und führt nur
+`echo "Define your deployment script!"` aus.
+
+## Projektstruktur
+
+Alle Dateien liegen im Wurzelverzeichnis, es gibt keine Unterordner:
 
 ```
-stages:
-    - build
-    - test
+.
+├── Program.cs            Einstiegspunkt, gibt "Hello World!" aus
+├── dotnetcore.csproj     Projektdatei (net7.0, Exe)
+├── .gitlab-ci.yml        Pipeline: restore, build, test, deploy-Platzhalter
+├── .gitpod.yml           Cloud-Workspace: baut und startet automatisch
+├── .gitattributes        "* text=auto"
+├── .gitignore            .NET-Build-Artefakte, Obsidian, Editor-, OS-Dateien
+├── CONTRIBUTING.md       Text von GitLab B.V. (DCO, Code of Conduct)
+├── LICENSE               MIT, Copyright GitLab B.V.
+└── README.md             bisheriges Template-README (GitLab-Pipeline-Beispiel)
 ```
 
-Next, we define our build job which simply runs the `dotnet build` command and
-identifies the `bin` folder as the output directory. Anything in the `bin` folder
-will be automatically handed off to future stages, and is also downloadable through
-the web UI.
+## Start
+
+Voraussetzung ist ein .NET-SDK in Version 7.0.
 
 ```
-build:
-    stage: build
-    script:
-        - "dotnet build"
-    artifacts:
-      paths:
-        - bin/
+dotnet restore
+dotnet build
+dotnet run
 ```
 
-Similar to the build step, we get our test output simply by running `dotnet test`.
+Ausgabe: `Hello World!`. Tests sind im Repository nicht vorhanden, der
+CI-Job `tests` ruft dennoch `dotnet test --no-restore` auf und findet
+schlicht keine Testprojekte.
 
-```
-test:
-    stage: test
-    script: 
-        - "dotnet test"
-```
+Alternativ über Gitpod: `.gitpod.yml` startet `dotnet build` als Init-Task
+und danach `dotnet run`.
 
-This should be enough to get you started. There are many, many powerful options 
-for your `.gitlab-ci.yml`. You can read about them in our documentation 
-[here](https://docs.gitlab.com/ee/ci/yaml/).
+## Konfiguration
 
-## Developing with Gitpod
+Es gibt keine Konfigurationsdateien: kein `.env`, kein `.env.example`,
+kein `appsettings.json`. Das Programm liest keine Umgebungsvariablen.
+Die Pipeline nutzt ausschließlich die in `.gitlab-ci.yml` definierten
+Variablen `OBJECTS_DIRECTORY`, `NUGET_PACKAGES_DIRECTORY` und
+`SOURCE_CODE_PATH`.
 
-This template repository also has a fully-automated dev setup for [Gitpod](https://docs.gitlab.com/ee/integration/gitpod.html).
+## Hinweise
 
-The `.gitpod.yml` ensures that, when you open this repository in Gitpod, you'll get a cloud workspace with .NET Core pre-installed, and your project will automatically be built and start running.
+- Der Name passt nicht zum Inhalt. Wer hier einen Meal-Planner erwartet,
+  findet das GitLab-`dotnet new console`-Beispiel vor.
+- `LICENSE` und `CONTRIBUTING.md` sind unverändert von GitLab B.V.
+  übernommen (MIT, Copyright 2019–present GitLab B.V.) und nennen
+  GitLab als Rechteinhaber, nicht den Repository-Inhaber.
+- Das alte `README.md` beschreibt eine Pipeline mit `stages`-Block und
+  `microsoft/dotnet:latest`; die aktuelle `.gitlab-ci.yml` verwendet
+  `sdk:7.0` und definiert keine `stages`-Liste. Die Dokumentation ist
+  damit veraltet.
+- `SOURCE_CODE_PATH: '*/*/'` erwartet ein verschachteltes Quellverzeichnis,
+  die Projektdatei liegt aber im Wurzelverzeichnis. Die Cache-Pfade der
+  Pipeline greifen deshalb ins Leere.
+- `.gitignore` enthält Obsidian-Regeln und doppelte Kommentarblöcke; sie
+  stammen aus einer Notiz-Vorlage und haben mit .NET nichts zu tun.
+- `net7.0` ist außerhalb des Support-Zeitraums; ein Update auf ein
+  aktuelles LTS-Target wäre sinnvoll, sobald echter Code entsteht.
