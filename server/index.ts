@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pool, initDb } from './db';
 import { attachUserFromToken, authRouter } from './auth';
+import { requireAuth } from './guards';
 import { householdsRouter } from './households';
 import { recipesRouter } from './recipes';
 import { plansRouter } from './plans';
@@ -35,10 +36,11 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
-app.use('/api/households', householdsRouter);
-app.use('/api/recipes', recipesRouter);
-app.use('/api/plans', plansRouter);
-app.use('/api/ai', aiRouter);
+// Alles ab hier nur mit gültigem Token — die Routen selbst prüfen zusätzlich Haushaltsrechte.
+app.use('/api/households', requireAuth, householdsRouter);
+app.use('/api/recipes', requireAuth, recipesRouter);
+app.use('/api/plans', requireAuth, plansRouter);
+app.use('/api/ai', requireAuth, aiRouter);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not-found', message: 'Unbekannter Endpunkt.' });
