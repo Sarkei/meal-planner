@@ -140,12 +140,10 @@ plansRouter.put('/:householdId/:weekStart/entry', async (req: AuthRequest, res) 
     return;
   }
   if (recipeId) {
-    const owned = await pool.query('SELECT 1 FROM recipes WHERE id = $1 AND household_id = $2', [
-      recipeId,
-      req.params.householdId,
-    ]);
-    if (!owned.rowCount) {
-      fail(res, 400, 'invalid-recipe', 'Rezept gehört nicht zu diesem Haushalt.');
+    // Die Rezeptbibliothek ist global — jedes aktive Rezept darf eingeplant werden.
+    const exists = await pool.query('SELECT 1 FROM recipes WHERE id = $1', [recipeId]);
+    if (!exists.rowCount) {
+      fail(res, 400, 'invalid-recipe', 'Rezept nicht gefunden.');
       return;
     }
   }

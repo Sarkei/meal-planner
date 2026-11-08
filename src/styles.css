@@ -110,3 +110,107 @@ body {
   background: var(--color-leaf-soft);
   color: #1b5a3c;
 }
+
+/* ── Dunkles Design ─────────────────────────────────────────────────────────
+   Die App nutzt bewusst wenige Grundfarben; hier werden sie für den Dark Mode
+   überschrieben, statt jede Komponente doppelt zu stylen. */
+[data-theme='dark'] body {
+  background: #0f1512;
+  color: #e6eee9;
+}
+[data-theme='dark'] .card {
+  background: #161f1a;
+  border-color: rgb(230 238 233 / 0.08);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+[data-theme='dark'] .bg-white,
+[data-theme='dark'] .bg-white\/70,
+[data-theme='dark'] .bg-white\/95 {
+  background-color: #161f1a;
+}
+[data-theme='dark'] .bg-cream {
+  background-color: #0f1512;
+}
+[data-theme='dark'] .bg-ink\/5,
+[data-theme='dark'] .hover\:bg-ink\/5:hover {
+  background-color: rgb(230 238 233 / 0.07);
+}
+[data-theme='dark'] .bg-leaf-soft,
+[data-theme='dark'] .bg-leaf-soft\/30,
+[data-theme='dark'] .bg-leaf-soft\/60 {
+  background-color: rgb(31 111 74 / 0.22);
+}
+[data-theme='dark'] .text-ink,
+[data-theme='dark'] .text-slate-900,
+[data-theme='dark'] .text-slate-700 {
+  color: #e6eee9;
+}
+[data-theme='dark'] .label {
+  color: rgb(230 238 233 / 0.62);
+}
+[data-theme='dark'] .chip {
+  background: rgb(31 111 74 / 0.28);
+  color: #8fe0b4;
+}
+[data-theme='dark'] .text-amber-600 {
+  color: #f5b354;
+}
+[data-theme='dark'] .text-ink\/80 {
+  color: rgb(230 238 233 / 0.82);
+}
+[data-theme='dark'] .text-ink\/60,
+[data-theme='dark'] .text-ink\/55,
+[data-theme='dark'] .text-ink\/50 {
+  color: rgb(230 238 233 / 0.62);
+}
+[data-theme='dark'] .text-ink\/45,
+[data-theme='dark'] .text-ink\/40,
+[data-theme='dark'] .text-ink\/35 {
+  color: rgb(230 238 233 / 0.45);
+}
+[data-theme='dark'] .text-ink\/25 {
+  color: rgb(230 238 233 / 0.28);
+}
+[data-theme='dark'] .text-leaf {
+  color: #6dd39f;
+}
+[data-theme='dark'] .border-ink\/10,
+[data-theme='dark'] .border-ink\/15,
+[data-theme='dark'] .border-ink\/25 {
+  border-color: rgb(230 238 233 / 0.14);
+}
+[data-theme='dark'] .divide-ink\/5 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(230 238 233 / 0.08);
+}
+[data-theme='dark'] .input,
+[data-theme='dark'] .textarea,
+[data-theme='dark'] .select {
+  background: #1b2521;
+  border-color: #2b3b33;
+  color: #e6eee9;
+}
+[data-theme='dark'] .btn-ghost {
+  background: #1b2521;
+  color: #e6eee9;
+  border-color: #2b3b33;
+}
+[data-theme='dark'] .btn-ghost:hover {
+  background: #223029;
+}
+[data-theme='dark'] .btn-primary {
+  background: #2c8a5e;
+}
+[data-theme='dark'] .bg-red-50 {
+  background-color: rgb(196 61 61 / 0.16);
+}
+[data-theme='dark'] .text-red-700,
+[data-theme='dark'] .text-red-600 {
+  color: #f0a9a9;
+}
+[data-theme='dark'] .bg-ink\/40 {
+  background-color: rgb(0 0 0 / 0.6);
+}
+[data-theme='dark'] .bg-white\/95 {
+  background-color: rgb(22 31 26 / 0.95);
+}
+

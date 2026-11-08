@@ -102,5 +102,51 @@ export async function initDb(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS recipes_household_idx ON recipes (household_id);
     CREATE INDEX IF NOT EXISTS plan_entries_plan_idx ON plan_entries (plan_id);
+
+    -- ── Nachträglich ergänzt: globale Rezeptsammlung, Bewertungen, Einstellungen, Reset-Tokens ──
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_lower text;
+    UPDATE users SET email_lower = lower(email) WHERE email_lower IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON users (email_lower);
+
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+
+    CREATE TABLE IF NOT EXISTS recipe_ratings (
+      user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipe_id  uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+      stars      integer NOT NULL CHECK (stars BETWEEN 1 AND 5),
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, recipe_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS recipe_comments (
+      id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      recipe_id  uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+      user_id    integer REFERENCES users(id) ON DELETE SET NULL,
+      body       text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id    integer PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      data       jsonb NOT NULL DEFAULT '{}'::jsonb,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id         serial PRIMARY KEY,
+      user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash text NOT NULL,
+      expires_at timestamptz NOT NULL,
+      used_at    timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS recipes_status_idx ON recipes (status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS recipe_ratings_recipe_idx ON recipe_ratings (recipe_id);
+    CREATE INDEX IF NOT EXISTS recipe_comments_recipe_idx ON recipe_comments (recipe_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS password_reset_hash_idx ON password_reset_tokens (token_hash);
   `);
 }

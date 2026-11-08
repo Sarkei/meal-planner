@@ -5,16 +5,17 @@ import { WeekPage } from './pages/WeekPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { HouseholdPage } from './pages/HouseholdPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { CalendarDays, BookOpen, Users, UserRound, CookingPot } from 'lucide-react';
+import { SettingsPage } from './pages/SettingsPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { CalendarDays, BookOpen, Users, Settings, CookingPot } from 'lucide-react';
 
-export type Route = { name: string; id?: string };
+export type Route = { name: string; id?: string; params: URLSearchParams };
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '');
-  if (!raw) return { name: 'week' };
-  const [name, id] = raw.split('/');
-  return { name, id };
+  const [path, query] = raw.split('?');
+  const [name, id] = path.split('/');
+  return { name: name || 'week', id, params: new URLSearchParams(query ?? '') };
 }
 
 export function navigate(path: string): void {
@@ -35,12 +36,17 @@ const NAV = [
   { id: 'week', label: 'Woche', icon: CalendarDays },
   { id: 'recipes', label: 'Rezepte', icon: BookOpen },
   { id: 'household', label: 'Haushalt', icon: Users },
-  { id: 'profile', label: 'Profil', icon: UserRound },
+  { id: 'settings', label: 'Profil', icon: Settings },
 ];
 
 export function App() {
   const { user, loading, activeHousehold, households, selectHousehold, logout } = useAuth();
   const route = useRoute();
+
+  if (route.name === 'reset') {
+    const token = route.params.get('token') ?? '';
+    return <ResetPasswordPage token={token} />;
+  }
 
   if (loading) {
     return (
@@ -62,8 +68,8 @@ export function App() {
         return <RecipeDetailPage recipeId={route.id} />;
       case 'household':
         return <HouseholdPage />;
-      case 'profile':
-        return <ProfilePage />;
+      case 'settings':
+        return <SettingsPage />;
       default:
         return <WeekPage />;
     }
@@ -89,6 +95,7 @@ export function App() {
               className="select max-w-[220px]"
               value={activeHousehold?.id ?? ''}
               onChange={(e) => selectHousehold(e.target.value)}
+              aria-label="Haushalt wählen"
             >
               {households.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -97,7 +104,7 @@ export function App() {
               ))}
             </select>
           )}
-          <button className="btn btn-ghost !px-3 !py-2 text-xs" onClick={logout} title="Abmelden">
+          <button className="btn btn-ghost !px-3 !py-2 text-xs" onClick={logout}>
             Abmelden
           </button>
         </div>

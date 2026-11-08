@@ -23,19 +23,25 @@ export type Nutrition = { kcal?: number; protein?: number; carbs?: number; fat?:
 
 export type Recipe = {
   id: string;
-  householdId: string;
-  ownerId: number | null;
-  ownerName: string | null;
+  householdId: string | null;
+  authorId: number | null;
+  authorName: string | null;
   title: string;
   description: string;
   servings: number;
   prepMinutes: number | null;
   tags: string[];
-  source: 'manual' | 'ai' | string;
+  source: 'manual' | 'ai' | 'copied' | string;
+  status: 'active' | 'archived' | string;
   ingredients: Ingredient[];
   steps: string[];
   nutrition: Nutrition;
   favorite: boolean;
+  favoriteCount: number;
+  rating: number | null;
+  ratingCount: number;
+  myRating: number | null;
+  commentCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -51,7 +57,17 @@ export type RecipeDraft = {
   nutrition: Nutrition;
 };
 
-export type Slot = 'fruehstueck' | 'mittag' | 'abend' | 'snack';
+export type RecipeComment = {
+  id: string;
+  body: string;
+  author: string;
+  userId: number | null;
+  createdAt: string;
+  mine: boolean;
+};
+
+export type Slots = 'fruehstueck' | 'mittag' | 'abend' | 'snack';
+export type Slot = Slots;
 
 export const SLOTS: { id: Slot; label: string }[] = [
   { id: 'fruehstueck', label: 'Frühstück' },
@@ -78,3 +94,65 @@ export type PlanEntry = {
 export type WeekPlan = { weekStart: string; planId: string | null; entries: PlanEntry[] };
 
 export type ShoppingItem = { name: string; unit: string; amount: number; approximated: boolean; usedIn: string[] };
+
+export type Facets = {
+  tags: { tag: string; count: number }[];
+  authors: { id: number; name: string; count: number }[];
+  totals: { recipes: number; favorites: number; ratings: number };
+};
+
+export type RecipeQuery = {
+  q?: string;
+  tags?: string[];
+  source?: 'ai' | 'manual' | 'copied' | '';
+  maxMinutes?: number | null;
+  maxKcal?: number | null;
+  minProtein?: number | null;
+  sort?: 'newest' | 'rating' | 'popular' | 'quickest' | 'title';
+  favorites?: boolean;
+  mine?: boolean;
+  authorId?: number | null;
+  archived?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export type UserSettings = {
+  theme: 'system' | 'light' | 'dark';
+  defaultServings: number;
+  diet: string;
+  allergies: string;
+  maxMinutes: number | null;
+  kcalTarget: number | null;
+  aiAutoFavorite: boolean;
+  defaultSlots: Slot[];
+};
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  theme: 'system',
+  defaultServings: 2,
+  diet: '',
+  allergies: '',
+  maxMinutes: null,
+  kcalTarget: null,
+  aiAutoFavorite: true,
+  defaultSlots: ['abend'],
+};
+
+export function buildRecipeQuery(base: RecipeQuery): string {
+  const params = new URLSearchParams();
+  if (base.q) params.set('q', base.q);
+  if (base.tags?.length) params.set('tags', base.tags.join(','));
+  if (base.source) params.set('source', base.source);
+  if (base.maxMinutes) params.set('maxMinutes', String(base.maxMinutes));
+  if (base.maxKcal) params.set('maxKcal', String(base.maxKcal));
+  if (base.minProtein) params.set('minProtein', String(base.minProtein));
+  if (base.sort) params.set('sort', base.sort);
+  if (base.favorites) params.set('favorites', '1');
+  if (base.mine) params.set('mine', '1');
+  if (base.authorId) params.set('authorId', String(base.authorId));
+  if (base.archived) params.set('archived', '1');
+  if (base.limit) params.set('limit', String(base.limit));
+  if (base.offset) params.set('offset', String(base.offset));
+  return params.toString();
+}

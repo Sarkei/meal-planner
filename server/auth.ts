@@ -1,28 +1,57 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { pool } from './db';
 import { fail, generateInviteCode, type AuthRequest } from './guards';
 
 const JWT_SECRET = process.env.JWT_SECRET?.trim() || 'dev-secret-change-me';
 const TOKEN_TTL = process.env.JWT_TTL?.trim() || '30d';
+const APP_PUBLIC_URL = (process.env.APP_PUBLIC_URL?.trim() || 'http://localhost:3000').replace(/\/+$/, '');
+const DEV_RESET_LINK = process.env.ALLOW_DEV_RESET_LINK !== '0';
+const RESET_TTL_MINUTES = Number(process.env.RESET_TTL_MINUTES ?? 60) || 60;
 
-export type JwtPayload = { sub: string; email: string };
+export type JwtPayload = { sub: string; email: string; tv: number };
 
-export function signToken(userId: number, email: string): string {
-  return jwt.sign({ sub: String(userId), email }, JWT_SECRET, { expiresIn: TOKEN_TTL } as jwt.SignOptions);
+export function signToken(userId: number, email: string, tokenVersion: number): string {
+  return jwt.sign({ sub: String(userId), email, tv: tokenVersion }, JWT_SECRET, {
+    expiresIn: TOKEN_TTL,
+  } as jwt.SignOptions);
 }
 
-/** Express-Middleware, die den Bearer-Token prüft und req.userId setzt. */
-export function attachUserFromToken(req: AuthRequest, _res: unknown, next: () => void): void {
+type TokenCache = { version: number; checkedAt: number };
+const tokenVersionCache = new Map<number, TokenCache>();
+
+function invalidateTokenCache(userId: number): void {
+  tokenVersionCache.delete(userId);
+}
+
+/**
+ * Prüft den Bearer-Token und setzt req.userId. Die token_version in der Datenbank macht
+ * Passwort-Reset bzw. „alle Geräte abmelden" wirksam — alte Tokens laufen dann ins Leere.
+ */
+export async function attachUserFromToken(req: AuthRequest, _res: unknown, next: () => void): Promise<void> {
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
   if (token) {
     try {
       const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
       const id = Number(payload.sub);
-      if (Number.isFinite(id) && id > 0) req.userId = id;
+      if (Number.isFinite(id) && id > 0) {
+        const cached = tokenVersionCache.get(id);
+        let version: number | null = null;
+        if (cached && Date.now() - cached.checkedAt < 60_000) {
+          version = cached.version;
+        } else {
+          const row = await pool.query<{ token_version: number }>('SELECT token_version FROM users WHERE id = $1', [id]);
+          if (row.rowCount) {
+            version = row.rows[0].token_version;
+            tokenVersionCache.set(id, { version, checkedAt: Date.now() });
+          }
+        }
+        if (version != null && Number(payload.tv ?? 0) === version) req.userId = id;
+      }
     } catch {
       /* ungültiger Token → bleibt anonym, requireAuth greift */
     }
@@ -63,6 +92,89 @@ export async function createHouseholdWithOwner(
   return { id: household.id, name: household.name, inviteCode: household.invite_code };
 }
 
+export type UserSettings = {
+  theme: 'system' | 'light' | 'dark';
+  defaultServings: number;
+  diet: string;
+  allergies: string;
+  maxMinutes: number | null;
+  kcalTarget: number | null;
+  aiAutoFavorite: boolean;
+  defaultSlots: string[];
+};
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  theme: 'system',
+  defaultServings: 2,
+  diet: '',
+  allergies: '',
+  maxMinutes: null,
+  kcalTarget: null,
+  aiAutoFavorite: true,
+  defaultSlots: ['abend'],
+};
+
+export function mergeSettings(raw: unknown): UserSettings {
+  const value = (raw ?? {}) as Partial<UserSettings>;
+  const slots = Array.isArray(value.defaultSlots)
+    ? value.defaultSlots.filter((s) => ['fruehstueck', 'mittag', 'abend', 'snack'].includes(String(s)))
+    : null;
+  return {
+    theme: value.theme === 'light' || value.theme === 'dark' || value.theme === 'system' ? value.theme : DEFAULT_SETTINGS.theme,
+    defaultServings: Math.min(12, Math.max(1, Number(value.defaultServings ?? DEFAULT_SETTINGS.defaultServings) || 2)),
+    diet: String(value.diet ?? '').slice(0, 120),
+    allergies: String(value.allergies ?? '').slice(0, 200),
+    maxMinutes: value.maxMinutes != null && Number.isFinite(Number(value.maxMinutes)) ? Number(value.maxMinutes) : null,
+    kcalTarget: value.kcalTarget != null && Number.isFinite(Number(value.kcalTarget)) ? Number(value.kcalTarget) : null,
+    aiAutoFavorite: value.aiAutoFavorite !== false,
+    defaultSlots: slots?.length ? slots : DEFAULT_SETTINGS.defaultSlots,
+  };
+}
+
+export async function loadSettings(userId: number): Promise<UserSettings> {
+  const row = await pool.query<{ data: unknown }>('SELECT data FROM user_settings WHERE user_id = $1', [userId]);
+  return mergeSettings(row.rows[0]?.data);
+}
+
+export async function saveSettings(userId: number, patch: unknown): Promise<UserSettings> {
+  const current = await loadSettings(userId);
+  const next = mergeSettings({ ...current, ...(patch as object) });
+  await pool.query(
+    `INSERT INTO user_settings (user_id, data, updated_at) VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
+    [userId, JSON.stringify(next)],
+  );
+  return next;
+}
+
+async function sendResetMail(email: string, link: string): Promise<boolean> {
+  const host = process.env.SMTP_HOST?.trim();
+  if (!host) return false;
+  try {
+    const nodemailer = await import('nodemailer');
+    const transport = nodemailer.default.createTransport({
+      host,
+      port: Number(process.env.SMTP_PORT ?? 587),
+      secure: process.env.SMTP_SECURE === '1',
+      auth:
+        process.env.SMTP_USER?.trim()
+          ? { user: process.env.SMTP_USER.trim(), pass: process.env.SMTP_PASS ?? '' }
+          : undefined,
+    });
+    await transport.sendMail({
+      from: process.env.SMTP_FROM?.trim() || 'noreply@mealplanner.local',
+      to: email,
+      subject: 'Meal Planner — Passwort zurücksetzen',
+      text: `Moin,\n\nhier ist dein Link zum Zurücksetzen des Passworts (${RESET_TTL_MINUTES} Minuten gültig):\n${link}\n\nWenn du das nicht warst, ignoriere diese Mail.`,
+      html: `<p>Moin,</p><p>hier ist dein Link zum Zurücksetzen des Passworts (${RESET_TTL_MINUTES} Minuten gültig):</p><p><a href="${link}">${link}</a></p><p>Wenn du das nicht warst, ignoriere diese Mail.</p>`,
+    });
+    return true;
+  } catch (e) {
+    console.warn('[auth] Reset-Mail konnte nicht gesendet werden:', e);
+    return false;
+  }
+}
+
 export const authRouter = Router();
 
 authRouter.post('/register', async (req, res) => {
@@ -80,13 +192,14 @@ authRouter.post('/register', async (req, res) => {
     }
     const hash = await bcrypt.hash(password, 12);
     const created = await pool.query<{ id: number; email: string; display_name: string }>(
-      'INSERT INTO users (email, password_hash, display_name) VALUES ($1,$2,$3) RETURNING id, email, display_name',
-      [email.toLowerCase(), hash, displayName],
+      `INSERT INTO users (email, email_lower, password_hash, display_name) VALUES ($1,$2,$3,$4)
+       RETURNING id, email, display_name`,
+      [email.toLowerCase(), email.toLowerCase(), hash, displayName],
     );
     const user = created.rows[0];
     const household = await createHouseholdWithOwner(`Küche von ${displayName.split(' ')[0]}`, user.id);
     res.status(201).json({
-      token: signToken(user.id, user.email),
+      token: signToken(user.id, user.email, 0),
       user: { id: user.id, email: user.email, displayName: user.display_name },
       household,
     });
@@ -104,17 +217,20 @@ authRouter.post('/login', async (req, res) => {
   }
   const { email, password } = parsed.data;
   try {
-    const found = await pool.query<{ id: number; email: string; password_hash: string; display_name: string }>(
-      'SELECT id, email, password_hash, display_name FROM users WHERE lower(email) = lower($1)',
-      [email],
-    );
+    const found = await pool.query<{
+      id: number;
+      email: string;
+      password_hash: string;
+      display_name: string;
+      token_version: number;
+    }>('SELECT id, email, password_hash, display_name, token_version FROM users WHERE lower(email) = lower($1)', [email]);
     const user = found.rows[0];
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       fail(res, 401, 'invalid-credentials', 'E-Mail oder Passwort ist falsch.');
       return;
     }
     res.json({
-      token: signToken(user.id, user.email),
+      token: signToken(user.id, user.email, user.token_version),
       user: { id: user.id, email: user.email, displayName: user.display_name },
     });
   } catch (e) {
@@ -146,7 +262,7 @@ authRouter.get('/me', async (req: AuthRequest, res) => {
   }>(
     `SELECT h.id, h.name, m.role, h.invite_code,
             (SELECT count(*) FROM household_members hm WHERE hm.household_id = h.id)::text AS members,
-            (SELECT count(*) FROM recipes r WHERE r.household_id = h.id)::text AS recipes
+            (SELECT count(*) FROM recipes rc WHERE rc.household_id = h.id AND rc.status = 'active')::text AS recipes
        FROM households h
        JOIN household_members m ON m.household_id = h.id
       WHERE m.user_id = $1
@@ -168,6 +284,7 @@ authRouter.get('/me', async (req: AuthRequest, res) => {
       memberCount: Number(h.members),
       recipeCount: Number(h.recipes),
     })),
+    settings: await loadSettings(req.userId),
   });
 });
 
@@ -176,8 +293,7 @@ authRouter.patch('/me', async (req: AuthRequest, res) => {
     fail(res, 401, 'unauthorized', 'Bitte einloggen.');
     return;
   }
-  const schema = z.object({ displayName: z.string().trim().min(2).max(80) });
-  const parsed = schema.safeParse(req.body);
+  const parsed = z.object({ displayName: z.string().trim().min(2).max(80) }).safeParse(req.body);
   if (!parsed.success) {
     fail(res, 400, 'invalid-input', 'Name zu kurz.');
     return;
@@ -186,7 +302,127 @@ authRouter.patch('/me', async (req: AuthRequest, res) => {
     'UPDATE users SET display_name = $1 WHERE id = $2 RETURNING id, email, display_name',
     [parsed.data.displayName, req.userId],
   );
-  res.json({ user: { id: updated.rows[0].id, email: updated.rows[0].email, displayName: updated.rows[0].display_name } });
+  res.json({
+    user: { id: updated.rows[0].id, email: updated.rows[0].email, displayName: updated.rows[0].display_name },
+  });
+});
+
+authRouter.get('/settings', async (req: AuthRequest, res) => {
+  if (!req.userId) {
+    fail(res, 401, 'unauthorized', 'Bitte einloggen.');
+    return;
+  }
+  res.json({ settings: await loadSettings(req.userId) });
+});
+
+authRouter.put('/settings', async (req: AuthRequest, res) => {
+  if (!req.userId) {
+    fail(res, 401, 'unauthorized', 'Bitte einloggen.');
+    return;
+  }
+  try {
+    res.json({ settings: await saveSettings(req.userId, req.body) });
+  } catch (e) {
+    console.error('[auth/settings]', e);
+    fail(res, 500, 'settings-failed', 'Einstellungen konnten nicht gespeichert werden.');
+  }
+});
+
+authRouter.post('/change-password', async (req: AuthRequest, res) => {
+  if (!req.userId) {
+    fail(res, 401, 'unauthorized', 'Bitte einloggen.');
+    return;
+  }
+  const parsed = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(200) }).safeParse(req.body);
+  if (!parsed.success) {
+    fail(res, 400, 'invalid-input', 'Neues Passwort braucht mindestens 8 Zeichen.');
+    return;
+  }
+  const found = await pool.query<{ email: string; password_hash: string; token_version: number }>(
+    'SELECT email, password_hash, token_version FROM users WHERE id = $1',
+    [req.userId],
+  );
+  if (!found.rowCount || !(await bcrypt.compare(parsed.data.currentPassword, found.rows[0].password_hash))) {
+    fail(res, 403, 'invalid-credentials', 'Aktuelles Passwort stimmt nicht.');
+    return;
+  }
+  const hash = await bcrypt.hash(parsed.data.newPassword, 12);
+  const version = found.rows[0].token_version + 1;
+  await pool.query('UPDATE users SET password_hash = $1, token_version = $2 WHERE id = $3', [hash, version, req.userId]);
+  invalidateTokenCache(req.userId);
+  res.json({ ok: true, token: signToken(req.userId, found.rows[0].email, version) });
+});
+
+authRouter.post('/forgot-password', async (req, res) => {
+  const parsed = z.object({ email: z.string().trim().email() }).safeParse(req.body);
+  if (!parsed.success) {
+    fail(res, 400, 'invalid-input', 'Bitte eine E-Mail-Adresse angeben.');
+    return;
+  }
+  const email = parsed.data.email.toLowerCase();
+  const user = await pool.query<{ id: number; email: string }>('SELECT id, email FROM users WHERE lower(email) = $1', [
+    email,
+  ]);
+  // Immer dieselbe Antwort — verrät nicht, ob es das Konto gibt.
+  const generic = { ok: true, devLink: null as string | null };
+  if (!user.rowCount) {
+    res.json(generic);
+    return;
+  }
+  const token = randomBytes(32).toString('hex');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  await pool.query(
+    `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+     VALUES ($1,$2, now() + ($3 || ' minutes')::interval)`,
+    [user.rows[0].id, tokenHash, String(RESET_TTL_MINUTES)],
+  );
+  const link = `${APP_PUBLIC_URL}/#/reset?token=${token}`;
+  const mailed = await sendResetMail(user.rows[0].email, link);
+  res.json({
+    ok: true,
+    mailed,
+    devLink: !mailed && DEV_RESET_LINK ? link : null,
+  });
+});
+
+authRouter.post('/reset-password', async (req, res) => {
+  const parsed = z.object({ token: z.string().min(20), newPassword: z.string().min(8).max(200) }).safeParse(req.body);
+  if (!parsed.success) {
+    fail(res, 400, 'invalid-input', 'Token fehlt oder Passwort zu kurz (min. 8 Zeichen).');
+    return;
+  }
+  const tokenHash = createHash('sha256').update(parsed.data.token).digest('hex');
+  const found = await pool.query<{ id: number; user_id: number; email: string }>(
+    `SELECT t.id, t.user_id, u.email FROM password_reset_tokens t JOIN users u ON u.id = t.user_id
+      WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > now()`,
+    [tokenHash],
+  );
+  if (!found.rowCount) {
+    fail(res, 400, 'invalid-token', 'Der Link ist abgelaufen oder wurde schon benutzt.');
+    return;
+  }
+  const row = found.rows[0];
+  const hash = await bcrypt.hash(parsed.data.newPassword, 12);
+  const bumped = await pool.query<{ token_version: number }>(
+    'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 RETURNING token_version',
+    [hash, row.user_id],
+  );
+  await pool.query('UPDATE password_reset_tokens SET used_at = now() WHERE id = $1', [row.id]);
+  invalidateTokenCache(row.user_id);
+  res.json({ ok: true, token: signToken(row.user_id, row.email, bumped.rows[0].token_version) });
+});
+
+authRouter.post('/logout-all', async (req: AuthRequest, res) => {
+  if (!req.userId) {
+    fail(res, 401, 'unauthorized', 'Bitte einloggen.');
+    return;
+  }
+  const bumped = await pool.query<{ token_version: number }>(
+    'UPDATE users SET token_version = token_version + 1 WHERE id = $1 RETURNING token_version',
+    [req.userId],
+  );
+  invalidateTokenCache(req.userId);
+  res.json({ ok: true, tokenVersion: bumped.rows[0].token_version });
 });
 
 authRouter.delete('/me', async (req: AuthRequest, res) => {
@@ -204,8 +440,6 @@ authRouter.delete('/me', async (req: AuthRequest, res) => {
     fail(res, 403, 'invalid-credentials', 'Passwort stimmt nicht.');
     return;
   }
-  // Haushalte, in denen der Nutzer Besitzer ist und weitere Mitglieder hat, müssen vorher
-  // übergeben oder verlassen werden — sonst verlieren andere ihre Daten.
   const shared = await pool.query<{ id: string; name: string }>(
     `SELECT h.id, h.name FROM households h
        JOIN household_members m ON m.household_id = h.id AND m.user_id = $1 AND m.role = 'owner'
@@ -222,6 +456,9 @@ authRouter.delete('/me', async (req: AuthRequest, res) => {
         AND EXISTS (SELECT 1 FROM household_members m2 WHERE m2.household_id = h.id AND m2.user_id = $1)`,
     [req.userId],
   );
+  // Rezepte bleiben in der Bibliothek — nur der Autor wird entkoppelt.
+  await pool.query('UPDATE recipes SET owner_id = NULL WHERE owner_id = $1', [req.userId]);
   await pool.query('DELETE FROM users WHERE id = $1', [req.userId]);
+  invalidateTokenCache(req.userId);
   res.json({ ok: true });
 });

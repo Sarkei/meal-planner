@@ -14,6 +14,8 @@ import {
   type Slot,
 } from './recipeSchema';
 import { loadPlan } from './plans';
+import { loadSettings } from './auth';
+import { resolveHousehold } from './recipes';
 
 type Provider = 'deepseek' | 'mistral' | 'gemini';
 
@@ -185,27 +187,75 @@ aiRouter.get('/status', (_req, res) => {
 
 aiRouter.post('/recipe', async (req: AuthRequest, res) => {
   const started = Date.now();
-  const body = req.body as { householdId?: string; idea?: string; servings?: number; constraints?: string };
-  const access = await requireHousehold(body.householdId, req.userId!);
-  if (!access.ok) {
-    fail(res, access.status, access.error, access.message);
-    return;
-  }
+  const body = req.body as {
+    householdId?: string;
+    idea?: string;
+    servings?: number;
+    constraints?: string;
+    save?: 'favorite' | 'library' | 'none';
+    favorite?: boolean;
+  };
   const idea = (body.idea ?? '').trim();
   if (idea.length < 3) {
     fail(res, 400, 'invalid-input', 'Beschreib kurz, was gekocht werden soll.');
     return;
   }
-  const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? 2)));
+  const settings = await loadSettings(req.userId!);
+  const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
+  const constraintParts = [
+    (body.constraints ?? '').trim(),
+    settings.diet ? `Ernährungsform: ${settings.diet}` : '',
+    settings.allergies ? `Unverträglichkeiten/Allergien: ${settings.allergies}` : '',
+    settings.maxMinutes ? `maximal ${settings.maxMinutes} Minuten Zubereitungszeit` : '',
+    settings.kcalTarget ? `grob ${settings.kcalTarget} kcal pro Portion` : '',
+  ].filter(Boolean);
   try {
     const prompt = fillTemplate(loadPrompt('recipe-draft', 'Erstelle ein Rezept als JSON.'), {
       idea,
       servings: String(servings),
-      constraints: (body.constraints ?? '').trim() || 'keine besonderen Vorgaben',
+      constraints: constraintParts.join('; ') || 'keine besonderen Vorgaben',
     });
-    const recipe = await generateValidated(prompt, aiRecipeSchema, 2, 90_000);
+    const draft = normalizeRecipe(await generateValidated(prompt, aiRecipeSchema, 2, 90_000));
+    const mode = body.save ?? 'favorite';
+
+    if (mode === 'none') {
+      await logRun(req.userId!, 'recipe-draft', true, started);
+      res.json({ recipe: draft, saved: false });
+      return;
+    }
+
+    const householdId = await resolveHousehold(String(body.householdId ?? ''), req.userId!);
+    if (!householdId) {
+      fail(res, 400, 'household-required', 'Kein Haushalt gefunden — bitte zuerst einen anlegen.');
+      return;
+    }
+    const created = await pool.query<{ id: string }>(
+      `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, tags, source, ingredients, steps, nutrition)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'ai',$8::jsonb,$9::jsonb,$10::jsonb)
+       RETURNING id`,
+      [
+        householdId,
+        req.userId,
+        draft.title,
+        draft.description,
+        draft.servings,
+        draft.prepMinutes,
+        draft.tags,
+        JSON.stringify(draft.ingredients),
+        JSON.stringify(draft.steps),
+        JSON.stringify(draft.nutrition),
+      ],
+    );
+    const recipeId = created.rows[0].id;
+    const makeFavorite = body.favorite === true || mode === 'favorite' || settings.aiAutoFavorite;
+    if (makeFavorite) {
+      await pool.query('INSERT INTO favorites (user_id, recipe_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [
+        req.userId,
+        recipeId,
+      ]);
+    }
     await logRun(req.userId!, 'recipe-draft', true, started);
-    res.json({ recipe: normalizeRecipe(recipe) });
+    res.json({ recipe: { ...draft, id: recipeId }, saved: true, favorite: makeFavorite });
   } catch (e) {
     await logRun(req.userId!, 'recipe-draft', false, started, e instanceof Error ? e.message : String(e));
     fail(res, 502, 'ai-failed', e instanceof Error ? e.message : 'KI-Antwort fehlgeschlagen.');
@@ -266,9 +316,19 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
     fail(res, 400, 'invalid-input', 'Wochenstart (YYYY-MM-DD) fehlt.');
     return;
   }
-  const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? 2)));
-  const requestedSlots = (body.slots ?? ['abend']).filter((s): s is Slot => slotSchema.safeParse(s).success);
+  const settings = await loadSettings(req.userId!);
+  const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
+  const requestedSlots = (body.slots ?? settings.defaultSlots ?? ['abend']).filter(
+    (s): s is Slot => slotSchema.safeParse(s).success,
+  );
   const slots = requestedSlots.length ? requestedSlots : (['abend'] as Slot[]);
+  const constraintParts = [
+    (body.constraints ?? '').trim(),
+    settings.diet ? `Ernährungsform: ${settings.diet}` : '',
+    settings.allergies ? `Unverträglichkeiten/Allergien: ${settings.allergies}` : '',
+    settings.maxMinutes ? `jede Mahlzeit in maximal ${settings.maxMinutes} Minuten` : '',
+    settings.kcalTarget ? `Tagesziel etwa ${settings.kcalTarget} kcal` : '',
+  ].filter(Boolean);
   const existing = await loadPlan(body.householdId!, weekStart);
   const existingEntries = (existing.entries as Array<{ title: string; dayIndex: number; slot: string }>) ?? [];
   const busy = body.mode === 'fill' ? new Set(existingEntries.map((e) => `${e.dayIndex}:${e.slot}`)) : new Set<string>();
@@ -278,7 +338,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
       weekStart,
       servings: String(servings),
       slots: slots.map((s) => `${s} (${SLOTS.includes(s) ? s : ''})`).join(', '),
-      constraints: (body.constraints ?? '').trim() || 'keine besonderen Vorgaben',
+      constraints: constraintParts.join('; ') || 'keine besonderen Vorgaben',
       existingTitles: existingEntries.map((e) => e.title).join(', ') || 'keine',
     });
     const plan = await generateValidated(prompt, weekPlanSchema, 2, 240_000);

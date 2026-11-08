@@ -1,8 +1,12 @@
 # Meal Planner
 
-Eigenständige Web-App für gemeinsame Essensplanung: Konten, Haushalte, Wochenpläne, Rezepte mit
-Favoriten und ein KI-Assistent, der einzelne Rezepte oder eine ganze Woche plant.
+Eigenständige Web-App für gemeinsame Essensplanung: Konten, Haushalte, Wochenpläne und eine
+**gemeinsame Rezeptsammlung aller Nutzer** — durchsuchbar, bewertbar, mit Favoriten und einem
+KI-Assistenten, der einzelne Rezepte oder eine ganze Woche plant.
 Läuft self-hosted als Docker-Stack (Postgres + Node), KI über DeepSeek.
+
+Zwei Grundsätze: **jede Person sieht jedes Rezept**, und **Rezepte werden nie gelöscht** —
+„Löschen" archiviert nur, die Datenbank wächst also immer weiter.
 
 ## Funktionen
 
@@ -17,12 +21,22 @@ Läuft self-hosted als Docker-Stack (Postgres + Node), KI über DeepSeek.
 - Besitzer kann Code neu erzeugen, Mitglieder entfernen, Haushalt umbenennen oder löschen.
 - Mitglieder sehen alle Rezepte und Wochenpläne des Haushalts.
 
-**Rezepte**
+**Rezeptsammlung (wie ein Kochbuch für alle)**
+- Alle Rezepte aller Nutzer sind sichtbar — unabhängig vom Haushalt.
+- Drei Ansichten: **Alle**, **Favoriten**, **Meine**; Sortierung nach neu, Bewertung, Beliebtheit,
+  Zubereitungszeit oder A–Z.
+- Suche über Titel, Beschreibung, **Zutaten** und **Autor**.
+- Filter: Tags (mit Anzahl), maximale Zeit, maximale Kalorien pro Portion, Mindest-Protein, Quelle
+  (KI / selbst geschrieben / kopiert) — kombinierbar, auch auf Favoriten.
+- Favoriten pro Nutzer; Herz auf jeder Karte, Zähler „× gemerkt".
+- **Bewertung** mit 1–5 Sternen pro Nutzer, Durchschnitt und Anzahl; **Kommentare/Notizen** unter
+  jedem Rezept (eigene wieder löschbar).
+- Fremde Rezepte lassen sich mit einem Klick **kopieren und anpassen** (Kopie gehört dir).
+- **Archivieren statt löschen**: Das Rezept verschwindet aus der Sammlung, bleibt aber mit
+  Bewertungen und Kommentaren in der Datenbank erhalten.
+- Portions-Schieber im Detail rechnet Zutatenmengen live um.
 - Anlegen per Hand oder per KI-Idee; Editor für Titel, Beschreibung, Portionen, Zeit, Tags,
   Zutaten (Menge + Einheit), Schritten und Nährwerten pro Portion.
-- Favoriten pro Nutzer (nicht pro Haushalt), Filter in der Rezeptliste.
-- Suche über Titel, Beschreibung und Zutaten.
-- Detailansicht mit Zutatenliste, nummerierten Schritten und Nährwertkarten.
 
 **Wochenplan**
 - 7 Tage × vier Slots (Frühstück, Mittag, Abend, Snack), Wochenwechsel per Pfeil oder „Heute".
@@ -33,12 +47,23 @@ Läuft self-hosted als Docker-Stack (Postgres + Node), KI über DeepSeek.
   geplante Portionszahl umgerechnet und abhakbar dargestellt; Kopieren als Text.
 
 **KI-Assistent**
-- `POST /api/ai/recipe` — Rezept aus einer Idee (Titel, Zutaten, Schritte, Nährwerte).
+- `POST /api/ai/recipe` — Rezept aus einer Idee, speichert es direkt und legt es (Standard) in die
+  Favoriten; Vorgaben aus dem Profil (Ernährungsform, Allergien, Zeit, Kalorien) fließen automatisch ein.
+- Eigene Vorgaben und Standard-Portionen wirken auch auf die Wochenplanung.
 - `POST /api/ai/recipe/refine` — bestehendes Rezept nach Wunsch überarbeiten (minimaler Diff).
 - `POST /api/ai/week` — komplette Woche planen; Modus `replace` ersetzt nur KI-Einträge,
   `fill` füllt ausschließlich leere Slots.
 - Provider: DeepSeek (Standard), Mistral, Gemini als Fallback — jeweils OpenAI-kompatibel bzw.
   eigene API; Prompts liegen als Markdown in `prompts/` mit `{{platzhaltern}}`.
+
+**Konten & Sicherheit**
+- **Passwort vergessen**: Reset-Link per Mail (SMTP) oder — wenn kein SMTP konfiguriert ist — direkt
+  in der App (`ALLOW_DEV_RESET_LINK=1`). Link gilt 60 Minuten, ist einmalig.
+- Passwort ändern im Profil; dabei werden alle anderen Sitzungen ungültig (`token_version` im JWT).
+- „Auf allen Geräten abmelden", Datenexport als JSON, Konto löschen (Rezepte bleiben anonymisiert).
+- Einstellungen: Anzeigename, Standard-Portionen, Kalorienziel, Ernährungsform, Allergien,
+  max. Zeit, Standard-Mahlzeiten für die KI-Woche, Auto-Favorit für KI-Rezepte, Design
+  (System/Hell/Dunkel).
 
 **Betrieb**
 - `/api/health` liefert DB-Status, KI-Provider und Uptime; Docker-Healthcheck nutzt diesen Endpunkt.
@@ -52,7 +77,7 @@ Läuft self-hosted als Docker-Stack (Postgres + Node), KI über DeepSeek.
 |---|---|
 | Frontend | React 19, Vite 6, Tailwind 4 (SPA, ausgeliefert vom Express-Server) |
 | Backend | Express 4, ein Prozess (`server/`), gebündelt per esbuild nach `server.js` |
-| Datenbank | PostgreSQL 16, Zugriff über `pg` |
+| **Datenbank** | PostgreSQL 16, Zugriff über `pg`; Tabellen u. a. `users`, `households`, `recipes`, `favorites`, `recipe_ratings`, `recipe_comments`, `meal_plans`, `plan_entries`, `user_settings`, `password_reset_tokens` |
 | Auth | JWT (`jsonwebtoken`), Passwörter mit `bcryptjs` |
 | Validierung | `zod` serverseitig für alle Schreib-Endpunkte |
 
@@ -72,7 +97,7 @@ server/
 src/
   App.tsx          Hash-Router, Navigation, Layout
   lib/             API-Client, Auth-Kontext, Typen
-  pages/           Auth, Woche, Rezepte, Rezept-Detail, Haushalt, Profil
+  pages/           Auth, Passwort-Reset, Woche, Rezepte, Rezept-Detail, Haushalt, Einstellungen
   components/      Modal, Rezeptkarte, Rezept-Editor
 prompts/
   recipe-draft.md  Rezept aus Idee
@@ -90,8 +115,16 @@ prompts/
 | `GET/PATCH/DELETE /api/households/:id` | Haushalt lesen (inkl. Mitglieder) / umbenennen / löschen |
 | `POST /api/households/:id/invite-code` | Code neu erzeugen |
 | `DELETE /api/households/:id/members/:userId` | Mitglied entfernen oder selbst verlassen |
-| `GET/POST /api/recipes`, `GET/PATCH/DELETE /api/recipes/:id` | Rezepte |
+| `GET /api/recipes?q=&tags=&maxMinutes=&maxKcal=&minProtein=&source=&sort=&favorites=1&mine=1` | Sammlung mit Filtern (`limit`/`offset`) |
+| `GET /api/recipes/facets` | Tags, Autoren, Zähler für die Filterleiste |
+| `GET/POST /api/recipes`, `GET/PATCH/DELETE /api/recipes/:id` | Rezept lesen/anlegen/ändern/archivieren |
 | `POST /api/recipes/:id/favorite`, `GET /api/recipes/favorites` | Favoriten |
+| `POST /api/recipes/:id/rating`, `DELETE /api/recipes/:id/rating` | Bewertung 1–5 |
+| `GET/POST /api/recipes/:id/comments`, `DELETE /api/recipes/:id/comments/:commentId` | Kommentare |
+| `POST /api/recipes/:id/copy` | Rezept in den eigenen Haushalt kopieren |
+| `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` | Passwort-Reset |
+| `POST /api/auth/change-password`, `POST /api/auth/logout-all` | Passwort ändern, Sitzungen beenden |
+| `GET/PUT /api/auth/settings` | Benutzereinstellungen |
 | `GET /api/plans/:householdId/:weekStart` | Woche lesen |
 | `PUT /api/plans/:householdId/:weekStart/entry` | Slot besetzen |
 | `DELETE /api/plans/:householdId/:weekStart/entry/:entryId` | Slot leeren |
@@ -139,6 +172,10 @@ npm run build && npm run build:server
 | `GEMINI_API_KEY`, `GEMINI_BASE_URL`, `AI_GEMINI_MODEL` | Gemini als Fallback |
 | `PORT` | Server-Port (Default 3000) |
 | `PROMPT_DIR` | Ordner der Prompt-Dateien (Default `./prompts`) |
+| `APP_PUBLIC_URL` | Basis-URL für Links (Passwort-Reset), z. B. `https://meal-planner.nas-timgreen.com` |
+| `ALLOW_DEV_RESET_LINK` | `1` (Default): Reset-Link in der App anzeigen, wenn kein SMTP konfiguriert ist |
+| `RESET_TTL_MINUTES` | Gültigkeit des Reset-Links (Default 60) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | optionaler Mailversand |
 
 Ohne API-Key startet die App normal; nur die KI-Endpunkte antworten dann mit 503/502.
 

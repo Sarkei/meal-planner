@@ -267,7 +267,7 @@ function SlotPicker({
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const data = await api<{ recipes: Recipe[] }>(`/recipes?householdId=${householdId}&q=${encodeURIComponent(query)}`);
+        const data = await api<{ recipes: Recipe[] }>(`/recipes?q=${encodeURIComponent(query)}&limit=30&sort=popular`);
         setRecipes(data.recipes);
       } catch {
         setRecipes([]);
@@ -312,15 +312,11 @@ function SlotPicker({
     setBusy(true);
     setError(null);
     try {
-      const draft = await api<{ recipe: Omit<Recipe, 'id'> }>('/ai/recipe', {
+      const data = await api<{ recipe: Recipe }>('/ai/recipe', {
         method: 'POST',
-        body: { householdId, idea, servings: 2 },
+        body: { householdId, idea, servings: 2, save: 'favorite' },
       });
-      const saved = await api<{ recipe: Recipe }>('/recipes', {
-        method: 'POST',
-        body: { ...draft.recipe, householdId },
-      });
-      await put({ recipeId: saved.recipe.id });
+      await put({ recipeId: data.recipe.id });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'KI konnte das Rezept nicht erstellen.');
       setBusy(false);
@@ -441,8 +437,9 @@ function AiWeekModal({
   onClose: () => void;
   onDone: (plan: WeekPlan) => void;
 }) {
-  const [servings, setServings] = useState(2);
-  const [slots, setSlots] = useState<Slot[]>(['abend']);
+  const { settings } = useAuth();
+  const [servings, setServings] = useState(settings.defaultServings ?? 2);
+  const [slots, setSlots] = useState<Slot[]>(settings.defaultSlots ?? ['abend']);
   const [constraints, setConstraints] = useState('');
   const [mode, setMode] = useState<'replace' | 'fill'>('replace');
   const [busy, setBusy] = useState(false);
@@ -513,6 +510,11 @@ function AiWeekModal({
           </div>
         </div>
 
+        <p className="text-[11px] text-ink/45">
+          Aus deinem Profil: {[settings.diet, settings.allergies, settings.maxMinutes ? `${settings.maxMinutes} min` : '', settings.kcalTarget ? `${settings.kcalTarget} kcal` : '']
+            .filter(Boolean)
+            .join(' · ') || 'noch keine Vorgaben hinterlegt'}
+        </p>
         <div>
           <label className="label">Vorgaben (optional)</label>
           <textarea
