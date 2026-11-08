@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #faf7f0;
+  --color-ink: #16281f;
+  --color-leaf: #1f6f4a;
+  --color-leaf-soft: #e7f2ea;
+  --color-amber: #d98324;
+  --color-clay: #b4552f;
+  --font-display: "Georgia", "Times New Roman", serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-leaf-soft);
+}
+
+.card {
+  background: #fff;
+  border: 1px solid rgb(22 40 31 / 0.08);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgb(22 40 31 / 0.04), 0 8px 24px -18px rgb(22 40 31 / 0.35);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: var(--color-leaf);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #18583b;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: #fff;
+  color: var(--color-ink);
+  border-color: rgb(22 40 31 / 0.12);
+}
+.btn-ghost:hover {
+  background: #f6f4ee;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(22 40 31 / 0.14);
+  background: #fff;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-ink);
+  outline: none;
+}
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--color-leaf);
+  box-shadow: 0 0 0 3px rgb(31 111 74 / 0.12);
+}
+
+.label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(22 40 31 / 0.55);
+  margin-bottom: 0.35rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--color-leaf-soft);
+  color: #1b5a3c;
+}

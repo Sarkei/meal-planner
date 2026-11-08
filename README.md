@@ -1,100 +1,152 @@
-# meal-planner
+# Meal Planner
 
-Privates Repository `Sarkei/meal-planner`. Der Inhalt besteht aus dem
-unveränderten GitLab-Template für .NET-Core-Projekte (`dotNET-Core.gitlab-ci.yml`).
-Es gibt keinen Code, der Mahlzeiten plant: keine Rezepte, keine Datenhaltung,
-keine Oberfläche. Das Repository dient derzeit ausschließlich als Gerüst, um
-eine .NET-Konsolenanwendung samt CI-Pipeline aufzusetzen.
+Eigenständige Web-App für gemeinsame Essensplanung: Konten, Haushalte, Wochenpläne, Rezepte mit
+Favoriten und ein KI-Assistent, der einzelne Rezepte oder eine ganze Woche plant.
+Läuft self-hosted als Docker-Stack (Postgres + Node), KI über DeepSeek.
 
 ## Funktionen
 
-Der gesamte Anwendungscode steht in `Program.cs` und gibt eine Zeile auf der
-Konsole aus:
+**Konten**
+- Registrierung mit E-Mail und Passwort (bcrypt, Kostenfaktor 12), Login per JWT (30 Tage).
+- Beim Registrieren entsteht automatisch ein eigener Haushalt „Küche von …".
+- Profilseite: Anzeigename ändern, KI-Status sehen, abmelden.
 
-```
-Hello World!
-```
+**Haushalte / Gruppen**
+- Beliebig viele Haushalte pro Konto; aktiver Haushalt wird oben umgeschaltet.
+- Beitritt über 6-stelligen Einladungscode (ohne 0/O/1/I, damit man ihn vorlesen kann).
+- Besitzer kann Code neu erzeugen, Mitglieder entfernen, Haushalt umbenennen oder löschen.
+- Mitglieder sehen alle Rezepte und Wochenpläne des Haushalts.
 
-Mehr passiert nicht. Es werden keine Argumente ausgewertet, keine Dateien
-gelesen oder geschrieben, keine Netzwerkverbindung aufgebaut. Die Pipeline
-baut und testet dieses Programm, mehr nicht.
+**Rezepte**
+- Anlegen per Hand oder per KI-Idee; Editor für Titel, Beschreibung, Portionen, Zeit, Tags,
+  Zutaten (Menge + Einheit), Schritten und Nährwerten pro Portion.
+- Favoriten pro Nutzer (nicht pro Haushalt), Filter in der Rezeptliste.
+- Suche über Titel, Beschreibung und Zutaten.
+- Detailansicht mit Zutatenliste, nummerierten Schritten und Nährwertkarten.
+
+**Wochenplan**
+- 7 Tage × vier Slots (Frühstück, Mittag, Abend, Snack), Wochenwechsel per Pfeil oder „Heute".
+- Slots füllen aus vorhandenen Rezepten, mit Freitext („Pizza vom Italiener") oder per
+  KI-Rezept direkt in den Slot.
+- Tageskalorien werden aus den Nährwerten der geplanten Rezepte summiert.
+- Einkaufsliste aus der Woche: Zutaten werden über alle Rezepte aggregiert, auf die im Slot
+  geplante Portionszahl umgerechnet und abhakbar dargestellt; Kopieren als Text.
+
+**KI-Assistent**
+- `POST /api/ai/recipe` — Rezept aus einer Idee (Titel, Zutaten, Schritte, Nährwerte).
+- `POST /api/ai/recipe/refine` — bestehendes Rezept nach Wunsch überarbeiten (minimaler Diff).
+- `POST /api/ai/week` — komplette Woche planen; Modus `replace` ersetzt nur KI-Einträge,
+  `fill` füllt ausschließlich leere Slots.
+- Provider: DeepSeek (Standard), Mistral, Gemini als Fallback — jeweils OpenAI-kompatibel bzw.
+  eigene API; Prompts liegen als Markdown in `prompts/` mit `{{platzhaltern}}`.
+
+**Betrieb**
+- `/api/health` liefert DB-Status, KI-Provider und Uptime; Docker-Healthcheck nutzt diesen Endpunkt.
+- Schema wird beim Start angelegt (`CREATE TABLE IF NOT EXISTS` in `server/db.ts`), keine
+  separaten Migrationsdateien.
+- KI-Aufrufe werden in `ai_runs` protokolliert (Art, Provider, Modell, Dauer, Fehler).
 
 ## Technik
 
-Angaben aus `dotnetcore.csproj` und `.gitlab-ci.yml`:
-
-| Merkmal | Wert |
-| --- | --- |
-| Projekt-SDK | `Microsoft.NET.Sdk` |
-| Ausgabetyp | `Exe` (Konsolenanwendung) |
-| Zielframework | `net7.0` |
-| Sprache | C# (`namespace dotnetcore`) |
-| Externe Pakete | keine |
-| CI-Image | `mcr.microsoft.com/dotnet/sdk:7.0` |
-| CI-Stages | `build`, `test`, `deploy` |
-| Gitpod-Image | `gitpod/workspace-dotnet` |
-
-Die CI cached `obj/project.assets.json`, die NuGet-Metadaten und das
-Verzeichnis `.nuget`. `deploy` ist ein Platzhalter und führt nur
-`echo "Define your deployment script!"` aus.
+| Baustein | Version / Rolle |
+|---|---|
+| Frontend | React 19, Vite 6, Tailwind 4 (SPA, ausgeliefert vom Express-Server) |
+| Backend | Express 4, ein Prozess (`server/`), gebündelt per esbuild nach `server.js` |
+| Datenbank | PostgreSQL 16, Zugriff über `pg` |
+| Auth | JWT (`jsonwebtoken`), Passwörter mit `bcryptjs` |
+| Validierung | `zod` serverseitig für alle Schreib-Endpunkte |
 
 ## Projektstruktur
 
-Alle Dateien liegen im Wurzelverzeichnis, es gibt keine Unterordner:
+```
+server/
+  index.ts         Express-App, /api/health, Static-Serving der SPA
+  db.ts            Pool + Schema
+  auth.ts          Registrierung, Login, /api/auth/me
+  households.ts    Haushalte, Einladungscodes, Mitglieder
+  recipes.ts       Rezepte + Favoriten
+  plans.ts         Wochenpläne, Einträge, Einkaufsliste
+  ai.ts            Provider-Auswahl, Prompts, Rezept-/Wochen-Generierung
+  recipeSchema.ts  Zod-Schemas für Rezept und Wochenplan
+  guards.ts        Auth-Middleware, Haushalts-Zugriffsprüfung
+src/
+  App.tsx          Hash-Router, Navigation, Layout
+  lib/             API-Client, Auth-Kontext, Typen
+  pages/           Auth, Woche, Rezepte, Rezept-Detail, Haushalt, Profil
+  components/      Modal, Rezeptkarte, Rezept-Editor
+prompts/
+  recipe-draft.md  Rezept aus Idee
+  recipe-refine.md Rezept überarbeiten
+  week-plan.md     Wochenplan
+```
 
-```
-.
-├── Program.cs            Einstiegspunkt, gibt "Hello World!" aus
-├── dotnetcore.csproj     Projektdatei (net7.0, Exe)
-├── .gitlab-ci.yml        Pipeline: restore, build, test, deploy-Platzhalter
-├── .gitpod.yml           Cloud-Workspace: baut und startet automatisch
-├── .gitattributes        "* text=auto"
-├── .gitignore            .NET-Build-Artefakte, Obsidian, Editor-, OS-Dateien
-├── CONTRIBUTING.md       Text von GitLab B.V. (DCO, Code of Conduct)
-├── LICENSE               MIT, Copyright GitLab B.V.
-└── README.md             bisheriges Template-README (GitLab-Pipeline-Beispiel)
-```
+## API-Überblick
+
+| Methode + Pfad | Zweck |
+|---|---|
+| `POST /api/auth/register`, `POST /api/auth/login` | Konto anlegen / anmelden (liefert JWT) |
+| `GET/PATCH /api/auth/me` | Profil und Haushalte lesen / Namen ändern |
+| `GET/POST /api/households`, `POST /api/households/join` | Haushalte listen, anlegen, beitreten |
+| `GET/PATCH/DELETE /api/households/:id` | Haushalt lesen (inkl. Mitglieder) / umbenennen / löschen |
+| `POST /api/households/:id/invite-code` | Code neu erzeugen |
+| `DELETE /api/households/:id/members/:userId` | Mitglied entfernen oder selbst verlassen |
+| `GET/POST /api/recipes`, `GET/PATCH/DELETE /api/recipes/:id` | Rezepte |
+| `POST /api/recipes/:id/favorite`, `GET /api/recipes/favorites` | Favoriten |
+| `GET /api/plans/:householdId/:weekStart` | Woche lesen |
+| `PUT /api/plans/:householdId/:weekStart/entry` | Slot besetzen |
+| `DELETE /api/plans/:householdId/:weekStart/entry/:entryId` | Slot leeren |
+| `GET /api/plans/:householdId/:weekStart/shopping-list` | Einkaufsliste |
+| `POST /api/ai/recipe`, `POST /api/ai/recipe/refine`, `POST /api/ai/week` | KI-Funktionen |
+| `GET /api/ai/status` | aktiver Provider und Modell |
+
+Alle Endpunkte außer Auth und Health erwarten `Authorization: Bearer <token>`.
 
 ## Start
 
-Voraussetzung ist ein .NET-SDK in Version 7.0.
+### Docker (empfohlen)
 
+```bash
+cp .env.example .env      # POSTGRES_PASSWORD, JWT_SECRET, DEEPSEEK_API_KEY eintragen
+docker compose up -d --build
+curl -fsS http://127.0.0.1:22226/api/health
 ```
-dotnet restore
-dotnet build
-dotnet run
+
+Die App hört auf Port `22226` (intern 3000). Postgres läuft im Compose-Netz ohne Port nach außen.
+Neben `default` hängt der Container im externen Netz `cloudflare-tunnel-net`; ohne Cloudflare-Tunnel
+muss das Netz existieren oder die Zeile im Compose entfernt werden
+(`docker network create cloudflare-tunnel-net`).
+
+### Lokal entwickeln
+
+```bash
+npm install
+cp .env.example .env      # POSTGRES_* auf eine lokale Datenbank zeigen lassen
+npm run dev               # tsx watch, Vite proxyt /api auf :3000
+npm run lint              # tsc --noEmit
+npm run build && npm run build:server
 ```
-
-Ausgabe: `Hello World!`. Tests sind im Repository nicht vorhanden, der
-CI-Job `tests` ruft dennoch `dotnet test --no-restore` auf und findet
-schlicht keine Testprojekte.
-
-Alternativ über Gitpod: `.gitpod.yml` startet `dotnet build` als Init-Task
-und danach `dotnet run`.
 
 ## Konfiguration
 
-Es gibt keine Konfigurationsdateien: kein `.env`, kein `.env.example`,
-kein `appsettings.json`. Das Programm liest keine Umgebungsvariablen.
-Die Pipeline nutzt ausschließlich die in `.gitlab-ci.yml` definierten
-Variablen `OBJECTS_DIRECTORY`, `NUGET_PACKAGES_DIRECTORY` und
-`SOURCE_CODE_PATH`.
+| Variable | Bedeutung |
+|---|---|
+| `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Datenbank |
+| `DATABASE_URL` | alternativ eine vollständige Verbindungs-URL |
+| `JWT_SECRET` | Signatur der Auth-Tokens (Pflicht) |
+| `AI_ACTIVE_PROVIDER` | `deepseek` (Default), `mistral` oder `gemini` |
+| `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `AI_DEEPSEEK_MODEL` | DeepSeek (Default-Modell `deepseek-chat`) |
+| `MISTRAL_API_KEY`, `MISTRAL_BASE_URL`, `AI_MISTRAL_MODEL` | Mistral als Fallback |
+| `GEMINI_API_KEY`, `GEMINI_BASE_URL`, `AI_GEMINI_MODEL` | Gemini als Fallback |
+| `PORT` | Server-Port (Default 3000) |
+| `PROMPT_DIR` | Ordner der Prompt-Dateien (Default `./prompts`) |
+
+Ohne API-Key startet die App normal; nur die KI-Endpunkte antworten dann mit 503/502.
 
 ## Hinweise
 
-- Der Name passt nicht zum Inhalt. Wer hier einen Meal-Planner erwartet,
-  findet das GitLab-`dotnet new console`-Beispiel vor.
-- `LICENSE` und `CONTRIBUTING.md` sind unverändert von GitLab B.V.
-  übernommen (MIT, Copyright 2019–present GitLab B.V.) und nennen
-  GitLab als Rechteinhaber, nicht den Repository-Inhaber.
-- Das alte `README.md` beschreibt eine Pipeline mit `stages`-Block und
-  `microsoft/dotnet:latest`; die aktuelle `.gitlab-ci.yml` verwendet
-  `sdk:7.0` und definiert keine `stages`-Liste. Die Dokumentation ist
-  damit veraltet.
-- `SOURCE_CODE_PATH: '*/*/'` erwartet ein verschachteltes Quellverzeichnis,
-  die Projektdatei liegt aber im Wurzelverzeichnis. Die Cache-Pfade der
-  Pipeline greifen deshalb ins Leere.
-- `.gitignore` enthält Obsidian-Regeln und doppelte Kommentarblöcke; sie
-  stammen aus einer Notiz-Vorlage und haben mit .NET nichts zu tun.
-- `net7.0` ist außerhalb des Support-Zeitraums; ein Update auf ein
-  aktuelles LTS-Target wäre sinnvoll, sobald echter Code entsteht.
+- Der Wochenstart ist immer Montag (`YYYY-MM-DD`), die Woche läuft Montag–Sonntag.
+- Portionen im Slot können von den Rezeptportionen abweichen; die Einkaufsliste rechnet mit dem
+  Faktor `Slot-Portionen / Rezept-Portionen`.
+- Zutaten ohne Menge erscheinen in der Einkaufsliste mit `~` („nach Bedarf").
+- Der KI-Modus `replace` löscht nur Einträge, deren Rezept `source = 'ai'` ist — manuell
+  eingetragene Mahlzeiten bleiben erhalten.
