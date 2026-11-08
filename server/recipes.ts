@@ -217,8 +217,8 @@ recipesRouter.get('/facets', async (_req: AuthRequest, res) => {
   );
   const totals = await pool.query<{ recipes: number; favorites: number; ratings: number }>(
     `SELECT (SELECT count(*) FROM recipes WHERE status = 'active')::int AS recipes,
-            (SELECT count(*) FROM favorites)::int AS favorites,
-            (SELECT count(*) FROM recipe_ratings)::int AS ratings`,
+            (SELECT count(*) FROM favorites f JOIN recipes rf ON rf.id = f.recipe_id WHERE rf.status = 'active')::int AS favorites,
+            (SELECT count(*) FROM recipe_ratings rt JOIN recipes rr ON rr.id = rt.recipe_id WHERE rr.status = 'active')::int AS ratings`,
   );
   res.json({ tags: tags.rows, authors: authors.rows, totals: totals.rows[0] });
 });
