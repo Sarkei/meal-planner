@@ -5,6 +5,30 @@ import type { Ingredient } from './recipeSchema';
 
 export const plansRouter = Router();
 
+/** Einheiten einheitlich und lesbar ausgeben (Kleinschreibung kommt aus der KI). */
+const UNIT_LABELS: Record<string, string> = {
+  g: 'g',
+  kg: 'kg',
+  ml: 'ml',
+  l: 'l',
+  el: 'EL',
+  tl: 'TL',
+  stueck: 'Stück',
+  'stück': 'Stück',
+  prise: 'Prise',
+  bund: 'Bund',
+  zehe: 'Zehe',
+  zehen: 'Zehen',
+  scheibe: 'Scheibe',
+  scheiben: 'Scheiben',
+  dose: 'Dose',
+  dosen: 'Dosen',
+  becher: 'Becher',
+  packung: 'Packung',
+  stange: 'Stange',
+  handvoll: 'Handvoll',
+};
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isValidDate(value: string): boolean {
@@ -170,8 +194,9 @@ plansRouter.get('/:householdId/:weekStart/shopping-list', async (req: AuthReques
     for (const ing of row.ingredients ?? []) {
       const name = String(ing.name ?? '').trim();
       if (!name) continue;
-      const unit = String(ing.unit ?? '').trim().toLowerCase();
-      const key = `${name.toLowerCase()}|${unit}`;
+      const unitKey = String(ing.unit ?? '').trim().toLowerCase();
+      const unit = UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim();
+      const key = `${name.toLowerCase()}|${unitKey}`;
       const current = groups.get(key) ?? { name, unit, amount: 0, unknown: false, usedIn: new Set<string>() };
       if (typeof ing.amount === 'number' && Number.isFinite(ing.amount)) {
         current.amount += ing.amount * factor;
