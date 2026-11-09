@@ -1,5 +1,67 @@
-import { Plus, Trash2, ImagePlus } from 'lucide-react';
-import type { Ingredient, RecipeDraft } from '../lib/types';
+import { useEffect, useRef, useState } from 'react';
+import { Loader2, Plus, Sparkles, Trash2, ImagePlus } from 'lucide-react';
+import type { Ingredient, Nutrition, RecipeDraft } from '../lib/types';
+import { api } from '../lib/api';
+
+/** Alle Einheiten, die in der Sammlung vorkommen — als Dropdown statt Freitext. */
+export const UNITS = [
+  'g',
+  'kg',
+  'ml',
+  'l',
+  'Stück',
+  'Zehe',
+  'Bund',
+  'Scheibe',
+  'Blatt',
+  'Stange',
+  'Dose',
+  'Packung',
+  'Becher',
+  'Tasse',
+  'Handvoll',
+  'EL',
+  'TL',
+  'Prise',
+  'cm',
+  'Zweig',
+  'nach Bedarf',
+] as const;
+
+/** Textfeld, das mit dem Inhalt wächst (kein manuelles Ziehen mehr). */
+function AutoTextarea({
+  id,
+  value,
+  onChange,
+  placeholder,
+  onKeyDown,
+}: {
+  id?: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      id={id}
+      ref={ref}
+      rows={1}
+      className="textarea resize-none overflow-hidden leading-relaxed"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
+      placeholder={placeholder}
+    />
+  );
+}
 
 /** Bild im Browser auf max. 1200 px verkleinern und als JPEG-Data-URL zurückgeben. */
 async function resizeImage(file: File, maxSize = 1200): Promise<string> {
@@ -14,6 +76,42 @@ async function resizeImage(file: File, maxSize = 1200): Promise<string> {
 
 export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange: (next: RecipeDraft) => void }) {
   const set = <K extends keyof RecipeDraft>(key: K, val: RecipeDraft[K]) => onChange({ ...value, [key]: val });
+
+  const [estimating, setEstimating] = useState(false);
+  const [estimateNote, setEstimateNote] = useState<string | null>(null);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const lastKey = useRef('');
+
+  const nutritionKey = JSON.stringify(
+    value.ingredients
+      .filter((i) => i.name.trim().length >= 2)
+      .map((i) => [i.name.trim().toLowerCase(), i.amount, i.unit.trim().toLowerCase()]),
+  ) + `|${value.servings}`;
+
+  // Nährwerte live schätzen, sobald sich Zutaten oder Portionen ändern (entprellt).
+  useEffect(() => {
+    const filled = valueRef.current.ingredients.filter((i) => i.name.trim().length >= 2);
+    if (!filled.length || lastKey.current === nutritionKey) return;
+    const timer = window.setTimeout(async () => {
+      setEstimating(true);
+      try {
+        const data = await api<{ nutrition: Nutrition }>('/ai/nutrition', {
+          method: 'POST',
+          body: { servings: valueRef.current.servings, ingredients: filled },
+        });
+        lastKey.current = nutritionKey;
+        onChange({ ...valueRef.current, nutrition: data.nutrition });
+        setEstimateNote('Nährwerte per KI geschätzt');
+      } catch {
+        setEstimateNote('Schätzung gerade nicht möglich — Werte bleiben wie eingetragen.');
+      } finally {
+        setEstimating(false);
+      }
+    }, 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nutritionKey]);
 
   const setIngredient = (index: number, patch: Partial<Ingredient>) => {
     set(
@@ -197,7 +295,7 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
                 placeholder="Zutat"
               />
               <input
-                className="input !w-20"
+                className="input !w-28 text-center"
                 type="number"
                 step="0.1"
                 min={0}
@@ -206,13 +304,21 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
                 onKeyDown={(e) => enterAdds(e, () => addIngredient(true))}
                 placeholder="Menge"
               />
-              <input
-                className="input !w-20"
-                value={ing.unit}
+              <select
+                className="input !w-32"
+                value={ing.unit || ''}
                 onChange={(e) => setIngredient(i, { unit: e.target.value })}
-                onKeyDown={(e) => enterAdds(e, () => addIngredient(true))}
-                placeholder="Einheit"
-              />
+              >
+                <option value="">Einheit</option>
+                {UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unit}
+                  </option>
+                ))}
+                {ing.unit && !UNITS.includes(ing.unit as (typeof UNITS)[number]) && (
+                  <option value={ing.unit}>{ing.unit} (alt)</option>
+                )}
+              </select>
               <button
                 className="rounded-lg p-1.5 text-ink/30 hover:bg-red-50 hover:text-clay"
                 onClick={() => set('ingredients', value.ingredients.filter((_, idx) => idx !== i))}
@@ -240,15 +346,15 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
               <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-leaf-soft text-[11px] font-bold text-leaf">
                 {i + 1}
               </span>
-              <textarea
-                id={`step-${i}`}
-                className="textarea"
-                rows={2}
-                value={step}
-                onChange={(e) => setStep(i, e.target.value)}
-                onKeyDown={(e) => enterAdds(e, () => addStep(true))}
-                placeholder={i === 0 ? 'Was zuerst? Enter für den nächsten Schritt.' : 'Nächster Schritt'}
-              />
+              <div className="flex-1">
+                <AutoTextarea
+                  id={`step-${i}`}
+                  value={step}
+                  onChange={(text) => setStep(i, text)}
+                  onKeyDown={(e) => enterAdds(e, () => addStep(true))}
+                  placeholder={i === 0 ? 'Was zuerst? Enter für den nächsten Schritt.' : 'Nächster Schritt'}
+                />
+              </div>
               <button
                 className="mt-1 rounded-lg p-1.5 text-ink/30 hover:bg-red-50 hover:text-clay"
                 onClick={() => set('steps', value.steps.filter((_, idx) => idx !== i))}
@@ -274,7 +380,20 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
           />
         </div>
         <div>
-          <p className="label">Nährwerte pro Portion</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="label !mb-0">Nährwerte pro Portion</p>
+            {estimating ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-leaf">
+                <Loader2 className="h-3 w-3 animate-spin" /> wird geschätzt …
+              </span>
+            ) : (
+              estimateNote && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-ink/45">
+                  <Sparkles className="h-3 w-3 text-leaf" /> {estimateNote}
+                </span>
+              )
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
               [

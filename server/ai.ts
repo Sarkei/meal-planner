@@ -187,6 +187,54 @@ aiRouter.get('/status', (_req, res) => {
   });
 });
 
+const nutritionEstimateSchema = z.object({
+  kcal: z.number().nonnegative().max(20000),
+  protein: z.number().nonnegative().max(2000),
+  carbs: z.number().nonnegative().max(3000),
+  fat: z.number().nonnegative().max(2000),
+});
+
+/**
+ * Live-Schätzung der Nährwerte pro Portion aus der Zutatenliste.
+ * Wird vom Rezept-Editor bei jeder Änderung (entprellt) aufgerufen.
+ */
+aiRouter.post('/nutrition', async (req: AuthRequest, res) => {
+  const started = Date.now();
+  const body = req.body as {
+    servings?: number;
+    ingredients?: Array<{ name?: string; amount?: number | null; unit?: string }>;
+  };
+  const ingredients = (body.ingredients ?? [])
+    .map((i) => ({
+      name: String(i.name ?? '').trim(),
+      amount: typeof i.amount === 'number' && Number.isFinite(i.amount) ? i.amount : null,
+      unit: String(i.unit ?? '').trim(),
+    }))
+    .filter((i) => i.name.length >= 2)
+    .slice(0, 40);
+  if (!ingredients.length) {
+    fail(res, 400, 'invalid-input', 'Noch keine Zutaten zum Schätzen.');
+    return;
+  }
+  const servings = Math.min(50, Math.max(1, Math.round(body.servings ?? 2)));
+  const list = ingredients
+    .map((i) => `- ${i.amount ?? 'nach Bedarf'} ${i.unit} ${i.name}`.replace(/\s+/g, ' ').trim())
+    .join('\n');
+  try {
+    const prompt = fillTemplate(loadPrompt('nutrition-estimate', 'Schätze die Nährwerte.'), {
+      servings: String(servings),
+      ingredients: list,
+    });
+    const estimate = await generateValidated(prompt, nutritionEstimateSchema, 2, 45_000);
+    await logRun(req.userId!, 'nutrition-estimate', true, started);
+    res.json({ nutrition: estimate, servings });
+  } catch (e) {
+    await logRun(req.userId!, 'nutrition-estimate', false, started, e instanceof Error ? e.message : String(e));
+    fail(res, 502, 'ai-failed', e instanceof Error ? e.message : 'Schätzung fehlgeschlagen.');
+  }
+});
+
+
 aiRouter.post('/recipe', async (req: AuthRequest, res) => {
   const started = Date.now();
   const body = req.body as {

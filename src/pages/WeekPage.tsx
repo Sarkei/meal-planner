@@ -192,7 +192,7 @@ export function WeekPage() {
           <Loader2 className="h-4 w-4 animate-spin" /> Woche wird geladen …
         </div>
       ) : (
-        <div className="mx-auto w-full max-w-3xl space-y-3">
+        <div className="w-full space-y-3">
           {WEEKDAYS.map((day, dayIndex) => {
             const isToday = addDays(weekStart, dayIndex) === toYmd(new Date());
             const entries = byDay[dayIndex];
