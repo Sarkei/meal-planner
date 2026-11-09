@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, KeyRound, Loader2, LogOut, Plus, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, Copy, Loader2, LogOut, Plus, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import type { HouseholdMember } from '../lib/types';
@@ -7,7 +7,7 @@ import type { HouseholdMember } from '../lib/types';
 export function HouseholdPage() {
   const { activeHousehold, households, refresh, selectHousehold, user } = useAuth();
   const [members, setMembers] = useState<HouseholdMember[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(activeHousehold));
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -16,7 +16,11 @@ export function HouseholdPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    if (!activeHousehold) return;
+    if (!activeHousehold) {
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await api<{ members: HouseholdMember[] }>(`/households/${activeHousehold.id}`);
@@ -32,7 +36,113 @@ export function HouseholdPage() {
     void load();
   }, [load]);
 
-  if (!activeHousehold) return <p className="card p-6 text-sm text-ink/60">Kein Haushalt vorhanden.</p>;
+  const join = async () => {
+    if (joinCode.trim().length < 4) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await api<{ household: { id: string }; alreadyMember: boolean }>('/households/join', {
+        method: 'POST',
+        body: { code: joinCode.trim() },
+      });
+      setJoinCode('');
+      await refresh();
+      selectHousehold(data.household.id);
+      setInfo(data.alreadyMember ? 'Du warst schon Mitglied dieses Haushalts.' : 'Haushalt beigetreten.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Beitritt fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const create = async () => {
+    if (newName.trim().length < 2) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await api<{ household: { id: string } }>('/households', {
+        method: 'POST',
+        body: { name: newName.trim() },
+      });
+      setNewName('');
+      await refresh();
+      selectHousehold(data.household.id);
+      setInfo('Haushalt angelegt.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Haushalt konnte nicht angelegt werden.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Noch kein Haushalt: erstellen oder beitreten ────────────────────────────
+  if (households.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="card p-5">
+          <h2 className="font-display text-xl font-bold">Willkommen, {user?.displayName.split(' ')[0]}</h2>
+          <p className="mt-1 text-sm text-ink/55">
+            Du bist noch in keinem Haushalt. Ein Haushalt ist die gemeinsame Küche: Wochenpläne, Einkaufsliste und
+            Mitglieder hängen daran. Rezepte in der Sammlung funktionieren auch ohne.
+          </p>
+        </div>
+
+        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="card space-y-3 p-5">
+            <div className="flex items-center gap-2">
+              <Plus className="h-4 w-4 text-leaf" />
+              <p className="font-display text-base font-bold">Haushalt erstellen</p>
+            </div>
+            <p className="text-xs text-ink/55">Für dich allein oder als Startpunkt für Familie und Mitbewohner.</p>
+            <input
+              className="input"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Name, z. B. Familie Nagraszus oder WG Küche"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void create();
+              }}
+            />
+            <button className="btn btn-primary w-full" onClick={() => void create()} disabled={busy || newName.trim().length < 2}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Haushalt erstellen
+            </button>
+          </div>
+
+          <div className="card space-y-3 p-5">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-leaf" />
+              <p className="font-display text-base font-bold">Haushalt beitreten</p>
+            </div>
+            <p className="text-xs text-ink/55">Du hast einen Einladungscode bekommen? Dann hier eintragen.</p>
+            <input
+              className="input tracking-[0.2em] uppercase"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              placeholder="CODE"
+              maxLength={12}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void join();
+              }}
+            />
+            <button className="btn btn-ghost w-full" onClick={() => void join()} disabled={busy || joinCode.trim().length < 4}>
+              <UserPlus className="h-4 w-4" /> Beitreten
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeHousehold) {
+    return (
+      <div className="card flex items-center justify-center gap-2 p-10 text-sm text-ink/50">
+        <Loader2 className="h-4 w-4 animate-spin" /> Haushalt wird geladen …
+      </div>
+    );
+  }
 
   const isOwner = activeHousehold.role === 'owner';
 
@@ -75,7 +185,7 @@ export function HouseholdPage() {
   };
 
   const leave = async () => {
-    if (!window.confirm(isOwner ? 'Haushalt inklusive Rezepte und Pläne löschen?' : 'Haushalt verlassen?')) return;
+    if (!window.confirm(isOwner ? 'Haushalt inklusive Wochenplänen löschen?' : 'Haushalt verlassen?')) return;
     setBusy(true);
     try {
       if (isOwner) await api(`/households/${activeHousehold.id}?force=1`, { method: 'DELETE' });
@@ -83,46 +193,6 @@ export function HouseholdPage() {
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Aktion fehlgeschlagen.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const join = async () => {
-    if (joinCode.trim().length < 4) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const data = await api<{ household: { id: string }; alreadyMember: boolean }>('/households/join', {
-        method: 'POST',
-        body: { code: joinCode.trim() },
-      });
-      setJoinCode('');
-      setInfo(data.alreadyMember ? 'Du bist schon Mitglied dieses Haushalts.' : 'Haushalt beigetreten.');
-      await refresh();
-      selectHousehold(data.household.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Beitritt fehlgeschlagen.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const create = async () => {
-    if (newName.trim().length < 2) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const data = await api<{ household: { id: string } }>('/households', {
-        method: 'POST',
-        body: { name: newName.trim() },
-      });
-      setNewName('');
-      await refresh();
-      selectHousehold(data.household.id);
-      setInfo('Haushalt angelegt.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Haushalt konnte nicht angelegt werden.');
     } finally {
       setBusy(false);
     }
@@ -136,8 +206,8 @@ export function HouseholdPage() {
             <p className="label !mb-0">Aktiver Haushalt</p>
             <h2 className="font-display text-xl font-bold">{activeHousehold.name}</h2>
             <p className="mt-1 text-xs text-ink/50">
-              {activeHousehold.memberCount} {activeHousehold.memberCount === 1 ? 'Person' : 'Personen'} ·{' '}
-              {activeHousehold.recipeCount} Rezepte · du bist {isOwner ? 'Besitzer' : 'Mitglied'}
+              {activeHousehold.memberCount} {activeHousehold.memberCount === 1 ? 'Person' : 'Personen'} · du bist{' '}
+              {isOwner ? 'Besitzer' : 'Mitglied'}
             </p>
           </div>
           <div className="rounded-xl border border-dashed border-leaf/40 bg-leaf-soft/50 px-4 py-3 text-center">
@@ -156,7 +226,7 @@ export function HouseholdPage() {
           </div>
         </div>
         <p className="mt-3 text-xs text-ink/55">
-          Wer diesen Code hat, kann dem Haushalt beitreten und sieht ab dann alle Rezepte und Wochenpläne.
+          Wer diesen Code hat, kann dem Haushalt beitreten und sieht ab dann die Wochenpläne dieses Haushalts.
         </p>
       </div>
 
@@ -205,7 +275,7 @@ export function HouseholdPage() {
         <div className="card space-y-3 p-5">
           <div className="flex items-center gap-2">
             <UserPlus className="h-4 w-4 text-leaf" />
-            <p className="label !mb-0">Haushalt beitreten</p>
+            <p className="label !mb-0">Weiterem Haushalt beitreten</p>
           </div>
           <input
             className="input tracking-[0.2em] uppercase"
@@ -215,20 +285,20 @@ export function HouseholdPage() {
             maxLength={12}
           />
           <button className="btn btn-ghost w-full" onClick={() => void join()} disabled={busy || joinCode.trim().length < 4}>
-            <KeyRound className="h-4 w-4" /> Beitreten
+            <UserPlus className="h-4 w-4" /> Beitreten
           </button>
         </div>
 
         <div className="card space-y-3 p-5">
           <div className="flex items-center gap-2">
             <Plus className="h-4 w-4 text-leaf" />
-            <p className="label !mb-0">Neuer Haushalt</p>
+            <p className="label !mb-0">Weiteren Haushalt erstellen</p>
           </div>
           <input
             className="input"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="z. B. WG Küche, Familie Nagraszus"
+            placeholder="z. B. WG Küche, Ferienwohnung"
           />
           <button className="btn btn-ghost w-full" onClick={() => void create()} disabled={busy || newName.trim().length < 2}>
             <Plus className="h-4 w-4" /> Anlegen
@@ -245,7 +315,7 @@ export function HouseholdPage() {
                 <div>
                   <p className="text-sm font-semibold">{h.name}</p>
                   <p className="text-[11px] text-ink/45">
-                    {h.memberCount} Personen · {h.recipeCount} Rezepte · {h.role === 'owner' ? 'Besitzer' : 'Mitglied'}
+                    {h.memberCount} Personen · {h.role === 'owner' ? 'Besitzer' : 'Mitglied'}
                   </p>
                 </div>
                 {h.id === activeHousehold.id ? (

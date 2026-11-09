@@ -30,6 +30,9 @@ export type Recipe = {
   description: string;
   servings: number;
   prepMinutes: number | null;
+  totalMinutes: number | null;
+  difficulty: 'leicht' | 'mittel' | 'schwer' | null;
+  imageUrl: string | null;
   tags: string[];
   source: 'manual' | 'ai' | 'copied' | string;
   status: 'active' | 'archived' | string;
@@ -51,6 +54,9 @@ export type RecipeDraft = {
   description: string;
   servings: number;
   prepMinutes: number | null;
+  totalMinutes: number | null;
+  difficulty: 'leicht' | 'mittel' | 'schwer' | null;
+  imageUrl: string | null;
   tags: string[];
   ingredients: Ingredient[];
   steps: string[];
@@ -81,7 +87,8 @@ export const WEEKDAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freita
 export type PlanEntry = {
   id: string;
   dayIndex: number;
-  slot: Slot;
+  position: number;
+  slot?: Slot | string;
   recipeId: string | null;
   title: string;
   customTitle: string | null;
@@ -121,22 +128,24 @@ export type UserSettings = {
   theme: 'system' | 'light' | 'dark';
   defaultServings: number;
   diet: string;
-  allergies: string;
+  allergies: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
   defaultSlots: Slot[];
+  specialWishes: string;
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'system',
   defaultServings: 2,
   diet: '',
-  allergies: '',
+  allergies: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,
   defaultSlots: ['abend'],
+  specialWishes: '',
 };
 
 export function buildRecipeQuery(base: RecipeQuery): string {

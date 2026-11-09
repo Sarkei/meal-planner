@@ -55,6 +55,7 @@ async function ensurePlan(householdId: string, weekStart: string, userId: number
 type EntryRow = {
   id: string;
   day_index: number;
+  position: number;
   slot: string;
   recipe_id: string | null;
   custom_title: string | null;
@@ -64,7 +65,6 @@ type EntryRow = {
   prep_minutes: number | null;
   tags: string[] | null;
   nutrition: Record<string, number> | null;
-  image_hint: string | null;
 };
 
 export async function loadPlan(householdId: string, weekStart: string) {
@@ -74,13 +74,12 @@ export async function loadPlan(householdId: string, weekStart: string) {
   );
   if (!plan.rowCount) return { weekStart, planId: null, entries: [] as unknown[] };
   const entries = await pool.query<EntryRow>(
-    `SELECT e.id, e.day_index, e.slot, e.recipe_id, e.custom_title, e.servings,
-            r.title, r.servings AS recipe_servings, r.prep_minutes, r.tags, r.nutrition,
-            NULL::text AS image_hint
+    `SELECT e.id, e.day_index, e.position, e.slot, e.recipe_id, e.custom_title, e.servings,
+            r.title, r.servings AS recipe_servings, r.prep_minutes, r.tags, r.nutrition
        FROM plan_entries e
        LEFT JOIN recipes r ON r.id = e.recipe_id
       WHERE e.plan_id = $1
-      ORDER BY e.day_index ASC, e.slot ASC`,
+      ORDER BY e.day_index ASC, e.position ASC, e.created_at ASC`,
     [plan.rows[0].id],
   );
   return {
@@ -89,6 +88,7 @@ export async function loadPlan(householdId: string, weekStart: string) {
     entries: entries.rows.map((e) => ({
       id: e.id,
       dayIndex: e.day_index,
+      position: e.position,
       slot: e.slot,
       recipeId: e.recipe_id,
       title: e.title ?? e.custom_title ?? 'Ohne Titel',
@@ -114,15 +114,19 @@ plansRouter.get('/:householdId/:weekStart', async (req: AuthRequest, res) => {
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
-plansRouter.put('/:householdId/:weekStart/entry', async (req: AuthRequest, res) => {
+/** Eintrag hinten an einen Tag anhängen. */
+plansRouter.post('/:householdId/:weekStart/entries', async (req: AuthRequest, res) => {
   const access = await requireHousehold(req.params.householdId, req.userId!);
   if (!access.ok) {
     fail(res, access.status, access.error, access.message);
     return;
   }
-  const { dayIndex, slot, recipeId, customTitle, servings } = req.body as {
+  if (!isValidDate(req.params.weekStart)) {
+    fail(res, 400, 'invalid-date', 'Datum im Format YYYY-MM-DD angeben.');
+    return;
+  }
+  const { dayIndex, recipeId, customTitle, servings } = req.body as {
     dayIndex?: number;
-    slot?: string;
     recipeId?: string | null;
     customTitle?: string | null;
     servings?: number | null;
@@ -131,16 +135,11 @@ plansRouter.put('/:householdId/:weekStart/entry', async (req: AuthRequest, res) 
     fail(res, 400, 'invalid-input', 'Tag zwischen 0 (Montag) und 6 (Sonntag) angeben.');
     return;
   }
-  if (!slot || !['fruehstueck', 'mittag', 'abend', 'snack'].includes(slot)) {
-    fail(res, 400, 'invalid-input', 'Ungültiger Slot.');
-    return;
-  }
   if (!recipeId && !customTitle?.trim()) {
     fail(res, 400, 'invalid-input', 'Rezept oder eigener Titel nötig.');
     return;
   }
   if (recipeId) {
-    // Die Rezeptbibliothek ist global — jedes aktive Rezept darf eingeplant werden.
     const exists = await pool.query('SELECT 1 FROM recipes WHERE id = $1', [recipeId]);
     if (!exists.rowCount) {
       fail(res, 400, 'invalid-recipe', 'Rezept nicht gefunden.');
@@ -148,13 +147,85 @@ plansRouter.put('/:householdId/:weekStart/entry', async (req: AuthRequest, res) 
     }
   }
   const planId = await ensurePlan(req.params.householdId, req.params.weekStart, req.userId!);
-  await pool.query(
-    `INSERT INTO plan_entries (plan_id, day_index, slot, recipe_id, custom_title, servings)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     ON CONFLICT (plan_id, day_index, slot)
-     DO UPDATE SET recipe_id = EXCLUDED.recipe_id, custom_title = EXCLUDED.custom_title, servings = EXCLUDED.servings`,
-    [planId, dayIndex, slot, recipeId ?? null, customTitle?.trim() || null, servings ?? null],
+  const next = await pool.query<{ pos: number }>(
+    'SELECT coalesce(max(position) + 1, 0)::int AS pos FROM plan_entries WHERE plan_id = $1 AND day_index = $2',
+    [planId, dayIndex],
   );
+  await pool.query(
+    `INSERT INTO plan_entries (plan_id, day_index, slot, position, recipe_id, custom_title, servings)
+     VALUES ($1,$2,'mahlzeit',$3,$4,$5,$6)`,
+    [planId, dayIndex, next.rows[0].pos, recipeId ?? null, customTitle?.trim() || null, servings ?? null],
+  );
+  res.json(await loadPlan(req.params.householdId, req.params.weekStart));
+});
+
+/** Portionen eines Eintrags ändern. */
+plansRouter.patch('/:householdId/:weekStart/entries/:entryId', async (req: AuthRequest, res) => {
+  const access = await requireHousehold(req.params.householdId, req.userId!);
+  if (!access.ok) {
+    fail(res, access.status, access.error, access.message);
+    return;
+  }
+  const servings = (req.body as { servings?: number | null }).servings;
+  if (servings != null && (!Number.isFinite(Number(servings)) || Number(servings) < 1 || Number(servings) > 50)) {
+    fail(res, 400, 'invalid-input', 'Portionen zwischen 1 und 50.');
+    return;
+  }
+  await pool.query(
+    `UPDATE plan_entries e SET servings = $1
+       FROM meal_plans p
+      WHERE e.id = $2 AND e.plan_id = p.id AND p.household_id = $3 AND p.week_start = $4`,
+    [servings ?? null, req.params.entryId, req.params.householdId, req.params.weekStart],
+  );
+  res.json(await loadPlan(req.params.householdId, req.params.weekStart));
+});
+
+/**
+ * Drag & Drop: Die Oberfläche schickt die komplette neue Anordnung der betroffenen Einträge
+ * (id, dayIndex, position). Wird in einer Transaktion geschrieben, damit nichts halb sortiert bleibt.
+ */
+plansRouter.put('/:householdId/:weekStart/reorder', async (req: AuthRequest, res) => {
+  const access = await requireHousehold(req.params.householdId, req.userId!);
+  if (!access.ok) {
+    fail(res, access.status, access.error, access.message);
+    return;
+  }
+  const items = (req.body as { items?: Array<{ id: string; dayIndex: number; position: number }> }).items;
+  if (!Array.isArray(items) || items.length === 0) {
+    fail(res, 400, 'invalid-input', 'Keine Reihenfolge übergeben.');
+    return;
+  }
+  const plan = await pool.query<{ id: string }>(
+    'SELECT id FROM meal_plans WHERE household_id = $1 AND week_start = $2',
+    [req.params.householdId, req.params.weekStart],
+  );
+  if (!plan.rowCount) {
+    fail(res, 404, 'not-found', 'Für diese Woche existiert kein Plan.');
+    return;
+  }
+  const planId = plan.rows[0].id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const item of items.slice(0, 200)) {
+      if (typeof item.id !== 'string' || typeof item.dayIndex !== 'number' || typeof item.position !== 'number') continue;
+      if (item.dayIndex < 0 || item.dayIndex > 6) continue;
+      await client.query('UPDATE plan_entries SET day_index = $1, position = $2 WHERE id = $3 AND plan_id = $4', [
+        item.dayIndex,
+        Math.max(0, Math.round(item.position)),
+        item.id,
+        planId,
+      ]);
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[plans/reorder]', e);
+    fail(res, 500, 'reorder-failed', 'Reihenfolge konnte nicht gespeichert werden.');
+    return;
+  } finally {
+    client.release();
+  }
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
@@ -178,7 +249,12 @@ plansRouter.get('/:householdId/:weekStart/shopping-list', async (req: AuthReques
     fail(res, access.status, access.error, access.message);
     return;
   }
-  const rows = await pool.query<{ title: string; servings: number; entry_servings: number | null; ingredients: Ingredient[] }>(
+  const rows = await pool.query<{
+    title: string;
+    servings: number;
+    entry_servings: number | null;
+    ingredients: Ingredient[];
+  }>(
     `SELECT r.title, r.servings, e.servings AS entry_servings, r.ingredients
        FROM plan_entries e
        JOIN meal_plans p ON p.id = e.plan_id

@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  ChefHat,
   Clock,
   Copy,
   Heart,
   Loader2,
   MessageCircle,
+  Minus,
   Pencil,
+  Plus,
   Save,
   Send,
   Sparkles,
   Star,
+  Timer,
   Trash2,
   Users,
   X,
@@ -28,12 +32,17 @@ function toDraft(recipe: Recipe): RecipeDraft {
     description: recipe.description,
     servings: recipe.servings,
     prepMinutes: recipe.prepMinutes,
+    totalMinutes: recipe.totalMinutes,
+    difficulty: recipe.difficulty,
+    imageUrl: recipe.imageUrl,
     tags: recipe.tags,
     ingredients: recipe.ingredients.length ? recipe.ingredients : [{ name: '', amount: null, unit: '' }],
     steps: recipe.steps.length ? recipe.steps : [''],
     nutrition: recipe.nutrition,
   };
 }
+
+const DIFFICULTY_LABEL: Record<string, string> = { leicht: 'Leicht', mittel: 'Mittel', schwer: 'Schwer' };
 
 export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
   const { user, activeHousehold, settings } = useAuth();
@@ -81,7 +90,6 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
   const factor = useMemo(() => (recipe ? portions / Math.max(1, recipe.servings) : 1), [portions, recipe]);
 
   const save = async () => {
-    if (!activeHousehold) return;
     if (!draft.title.trim() || draft.ingredients.every((i) => !i.name.trim()) || draft.steps.every((s) => !s.trim())) {
       setError('Titel, mindestens eine Zutat und ein Schritt sind Pflicht.');
       return;
@@ -103,7 +111,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
       } else {
         const data = await api<{ recipe: Recipe }>('/recipes', {
           method: 'POST',
-          body: { ...body, householdId: activeHousehold.id },
+          body: { ...body, householdId: activeHousehold?.id },
         });
         setRecipe(data.recipe);
         setDraft(toDraft(data.recipe));
@@ -215,6 +223,8 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
     );
   }
 
+  const totalMinutes = recipe?.totalMinutes ?? recipe?.prepMinutes ?? null;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -239,7 +249,11 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
                   <button className="btn btn-ghost !px-2 !py-1.5 text-xs" onClick={() => setEditing(true)}>
                     <Pencil className="h-4 w-4" /> Bearbeiten
                   </button>
-                  <button className="btn btn-ghost !px-2 !py-1.5 text-xs !text-clay" onClick={() => void archive()} disabled={busy}>
+                  <button
+                    className="btn btn-ghost !px-2 !py-1.5 text-xs !text-clay"
+                    onClick={() => void archive()}
+                    disabled={busy}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </>
@@ -281,145 +295,202 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
       ) : (
         recipe && (
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="card space-y-5 p-5 lg:col-span-2">
-              <div>
-                <h2 className="font-display text-2xl leading-tight font-bold">{recipe.title}</h2>
-                {recipe.description && <p className="mt-1 text-sm text-ink/60">{recipe.description}</p>}
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-ink/55">
-                  <span className="inline-flex items-center gap-1 font-semibold text-amber-600">
-                    <Star className="h-3.5 w-3.5 fill-current" />
-                    {recipe.rating != null ? recipe.rating.toFixed(1) : '—'}
-                    <span className="font-normal text-ink/40">({recipe.ratingCount})</span>
-                  </span>
-                  {recipe.prepMinutes != null && (
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" /> {recipe.prepMinutes} min
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5" /> {recipe.servings} Portionen
-                  </span>
-                  {recipe.authorName && <span>von {recipe.authorName}</span>}
-                  {recipe.source === 'ai' && (
-                    <span className="inline-flex items-center gap-1 text-leaf">
-                      <Sparkles className="h-3.5 w-3.5" /> per KI
-                    </span>
-                  )}
-                  {recipe.source === 'copied' && <span>Kopie</span>}
+            <div className="card overflow-hidden lg:col-span-2">
+              {/* 1. Bild */}
+              {recipe.imageUrl ? (
+                <img src={recipe.imageUrl} alt={recipe.title} className="h-56 w-full object-cover sm:h-72" />
+              ) : (
+                <div className="flex h-40 w-full items-center justify-center bg-gradient-to-br from-leaf-soft via-cream to-amber-100 sm:h-56">
+                  <ChefHat className="h-10 w-10 text-leaf/40" />
                 </div>
-                {recipe.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {recipe.tags.map((t) => (
-                      <span key={t} className="chip">
-                        {t}
-                      </span>
-                    ))}
+              )}
+
+              <div className="space-y-6 p-5">
+                {/* 2. Titel + Kurzüberblick */}
+                <div>
+                  <h1 className="font-display text-2xl leading-tight font-bold sm:text-3xl">{recipe.title}</h1>
+                  {recipe.description && <p className="mt-2 text-sm text-ink/60">{recipe.description}</p>}
+
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-xl bg-cream px-3 py-2">
+                      <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-ink/45">
+                        <Timer className="h-3 w-3" /> Vorbereitung
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold">{recipe.prepMinutes != null ? `${recipe.prepMinutes} min` : '—'}</p>
+                    </div>
+                    <div className="rounded-xl bg-cream px-3 py-2">
+                      <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-ink/45">
+                        <Clock className="h-3 w-3" /> Gesamt
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold">{totalMinutes != null ? `${totalMinutes} min` : '—'}</p>
+                    </div>
+                    <div className="rounded-xl bg-cream px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-ink/45">Aufwand</p>
+                      <p className="mt-0.5 text-sm font-bold">
+                        {recipe.difficulty ? DIFFICULTY_LABEL[recipe.difficulty] ?? recipe.difficulty : '—'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-cream px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-ink/45">Basis</p>
+                      <p className="mt-0.5 text-sm font-bold">{recipe.servings} Portionen</p>
+                    </div>
                   </div>
-                )}
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-ink/40">Deine Bewertung</span>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-ink/55">
+                    <span className="inline-flex items-center gap-1 font-semibold text-amber-600">
+                      <Star className="h-3.5 w-3.5 fill-current" />
+                      {recipe.rating != null ? recipe.rating.toFixed(1) : '—'}
+                      <span className="font-normal text-ink/40">({recipe.ratingCount})</span>
+                    </span>
+                    {recipe.authorName && <span>von {recipe.authorName}</span>}
+                    {recipe.source === 'ai' && (
+                      <span className="inline-flex items-center gap-1 text-leaf">
+                        <Sparkles className="h-3.5 w-3.5" /> per KI
+                      </span>
+                    )}
+                    {recipe.source === 'copied' && <span>Kopie</span>}
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" /> {recipe.favoriteCount}× gemerkt
+                    </span>
+                  </div>
+
+                  {recipe.tags.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {recipe.tags.map((t) => (
+                        <span key={t} className="chip">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Zutaten mit Portions-Schalter */}
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                    <p className="label !mb-0">Zutaten</p>
+                    <div className="flex items-center gap-2 rounded-xl border border-ink/15 px-1 py-0.5">
+                      <button
+                        className="rounded-lg p-1.5 text-ink/60 transition hover:bg-ink/5 disabled:opacity-30"
+                        onClick={() => setPortions((p) => Math.max(1, p - 1))}
+                        disabled={portions <= 1}
+                        aria-label="Weniger Portionen"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="min-w-[4.5rem] text-center text-xs font-bold">
+                        {portions} {portions === 1 ? 'Portion' : 'Portionen'}
+                      </span>
+                      <button
+                        className="rounded-lg p-1.5 text-ink/60 transition hover:bg-ink/5 disabled:opacity-30"
+                        onClick={() => setPortions((p) => Math.min(24, p + 1))}
+                        disabled={portions >= 24}
+                        aria-label="Mehr Portionen"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <ul className="divide-y divide-ink/5">
+                    {recipe.ingredients.map((ing, i) => (
+                      <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
+                        <span>{ing.name}</span>
+                        <span className="shrink-0 font-semibold text-ink/60">
+                          {ing.amount != null ? Math.round(ing.amount * factor * 10) / 10 : ''} {ing.unit}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {portions !== recipe.servings && (
+                    <p className="mt-1 text-[11px] text-ink/45">
+                      Umgerechnet von {recipe.servings} auf {portions} Portionen (Faktor{' '}
+                      {(portions / Math.max(1, recipe.servings)).toFixed(2)}).
+                    </p>
+                  )}
+                </div>
+
+                {/* 4. Anleitung */}
+                <div>
+                  <p className="label">Zubereitung</p>
+                  <ol className="space-y-3">
+                    {recipe.steps.map((step, i) => (
+                      <li key={i} className="flex gap-3 text-sm leading-relaxed">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-leaf text-xs font-bold text-white">
+                          {i + 1}
+                        </span>
+                        <span className="pt-1">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+
+                {/* Kommentare */}
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <MessageCircle className="h-4 w-4 text-leaf" />
+                    <p className="label !mb-0">Notizen & Kommentare ({comments.length})</p>
+                  </div>
+                  <div className="mb-3 flex gap-2">
+                    <input
+                      className="input"
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="Wie ist es geworden? Tipps für andere?"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void sendComment();
+                      }}
+                    />
+                    <button className="btn btn-primary" onClick={() => void sendComment()} disabled={busy || commentText.trim().length < 2}>
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {comments.length === 0 ? (
+                    <p className="text-xs text-ink/45">Noch keine Kommentare — sei der erste.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {comments.map((c) => (
+                        <li key={c.id} className="rounded-xl bg-cream px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-bold text-ink/60">
+                              {c.author} · {new Date(c.createdAt).toLocaleDateString('de-DE')}
+                            </p>
+                            {c.mine && (
+                              <button
+                                className="text-ink/30 hover:text-clay"
+                                onClick={() => void deleteComment(c)}
+                                aria-label="Kommentar löschen"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <p className="mt-1 text-sm text-ink/80">{c.body}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Seitenspalte */}
+            <div className="space-y-4">
+              <div className="card p-5">
+                <p className="label">Deine Bewertung</p>
+                <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button key={n} onClick={() => void rate(n)} aria-label={`${n} Sterne`} className="p-0.5">
                       <Star
-                        className={`h-5 w-5 ${n <= (recipe.myRating ?? 0) ? 'fill-amber-500 text-amber-500' : 'text-ink/25 hover:text-amber-500'}`}
+                        className={`h-6 w-6 ${n <= (recipe.myRating ?? 0) ? 'fill-amber-500 text-amber-500' : 'text-ink/25 hover:text-amber-500'}`}
                       />
                     </button>
                   ))}
                 </div>
+                <p className="mt-2 text-xs text-ink/50">
+                  {recipe.myRating ? `Du hast ${recipe.myRating} von 5 Sternen gegeben.` : 'Noch nicht bewertet.'}
+                </p>
               </div>
 
-              <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="label !mb-0">Zutaten</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-ink/50">Portionen</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={12}
-                      value={portions}
-                      onChange={(e) => setPortions(Number(e.target.value))}
-                      className="w-28 accent-[var(--color-leaf)]"
-                    />
-                    <span className="w-6 text-sm font-bold">{portions}</span>
-                  </div>
-                </div>
-                <ul className="divide-y divide-ink/5">
-                  {recipe.ingredients.map((ing, i) => (
-                    <li key={i} className="flex items-center justify-between py-2 text-sm">
-                      <span>{ing.name}</span>
-                      <span className="font-semibold text-ink/60">
-                        {ing.amount != null ? Math.round(ing.amount * factor * 10) / 10 : ''} {ing.unit}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {recipe.nutrition?.kcal != null && (
-                  <p className="mt-2 text-[11px] text-ink/45">
-                    Nährwerte gelten pro Portion — bei {portions} Portionen also {Math.round(recipe.nutrition.kcal * portions)} kcal
-                    insgesamt.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <p className="label">Zubereitung</p>
-                <ol className="space-y-2">
-                  {recipe.steps.map((step, i) => (
-                    <li key={i} className="flex gap-3 text-sm leading-relaxed">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-leaf-soft text-xs font-bold text-leaf">
-                        {i + 1}
-                      </span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              <div>
-                <div className="mb-2 flex items-center gap-2">
-                  <MessageCircle className="h-4 w-4 text-leaf" />
-                  <p className="label !mb-0">Notizen & Kommentare ({comments.length})</p>
-                </div>
-                <div className="mb-3 flex gap-2">
-                  <input
-                    className="input"
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Wie ist es geworden? Tipps für andere?"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void sendComment();
-                    }}
-                  />
-                  <button className="btn btn-primary" onClick={() => void sendComment()} disabled={busy || commentText.trim().length < 2}>
-                    <Send className="h-4 w-4" />
-                  </button>
-                </div>
-                {comments.length === 0 ? (
-                  <p className="text-xs text-ink/45">Noch keine Kommentare — sei der erste.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {comments.map((c) => (
-                      <li key={c.id} className="rounded-xl bg-cream px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-bold text-ink/60">
-                            {c.author} · {new Date(c.createdAt).toLocaleDateString('de-DE')}
-                          </p>
-                          {c.mine && (
-                            <button className="text-ink/30 hover:text-clay" onClick={() => void deleteComment(c)} aria-label="Kommentar löschen">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        <p className="mt-1 text-sm text-ink/80">{c.body}</p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-4">
               <div className="card p-5">
                 <p className="label">Nährwerte pro Portion</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -439,13 +510,16 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
                     </div>
                   ))}
                 </div>
+                <p className="mt-2 text-[11px] text-ink/45">
+                  Bei {portions} Portionen insgesamt{' '}
+                  {recipe.nutrition?.kcal != null ? `${Math.round(Number(recipe.nutrition.kcal) * portions)} kcal` : '—'}.
+                </p>
               </div>
 
               <div className="card p-5 text-xs text-ink/55">
                 <p className="label">Details</p>
                 <p>Angelegt: {new Date(recipe.createdAt).toLocaleDateString('de-DE')}</p>
                 <p>Zuletzt geändert: {new Date(recipe.updatedAt).toLocaleDateString('de-DE')}</p>
-                <p>{recipe.favoriteCount}× als Favorit gespeichert</p>
                 <p className="mt-2">
                   Rezepte werden nicht gelöscht: „Archivieren" blendet sie nur aus, damit die Sammlung erhalten bleibt.
                 </p>

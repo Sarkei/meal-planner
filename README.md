@@ -16,7 +16,10 @@ Zwei Grundsätze: **jede Person sieht jedes Rezept**, und **Rezepte werden nie g
 - Profilseite: Anzeigename ändern, KI-Status sehen, abmelden.
 
 **Haushalte / Gruppen**
-- Beliebig viele Haushalte pro Konto; aktiver Haushalt wird oben umgeschaltet.
+- Nach der Registrierung gibt es **keinen automatischen Haushalt**: Der Tab „Haushalt" zeigt
+  „Haushalt erstellen" (eigener Name) und „Haushalt beitreten" (Einladungscode).
+- Beliebig viele Haushalte pro Konto; aktiver Haushalt wird oben umgeschaltet. Rezepte lassen sich
+  auch ohne Haushalt anlegen — nur Wochenpläne hängen daran.
 - Beitritt über 6-stelligen Einladungscode (ohne 0/O/1/I, damit man ihn vorlesen kann).
 - Besitzer kann Code neu erzeugen, Mitglieder entfernen, Haushalt umbenennen oder löschen.
 - Mitglieder sehen alle Rezepte und Wochenpläne des Haushalts.
@@ -35,13 +38,19 @@ Zwei Grundsätze: **jede Person sieht jedes Rezept**, und **Rezepte werden nie g
 - **Archivieren statt löschen**: Das Rezept verschwindet aus der Sammlung, bleibt aber mit
   Bewertungen und Kommentaren in der Datenbank erhalten.
 - Portions-Schieber im Detail rechnet Zutatenmengen live um.
-- Anlegen per Hand oder per KI-Idee; Editor für Titel, Beschreibung, Portionen, Zeit, Tags,
-  Zutaten (Menge + Einheit), Schritten und Nährwerten pro Portion.
+- Anlegen per Hand oder per KI-Idee; Editor für Titel, Beschreibung, Portionen, Vorbereitungs- und
+  Gesamtzeit, Aufwand (leicht/mittel/schwer), Bild, Tags, Zutaten, Schritte und Nährwerte.
+- **Bild oben:** Rezeptfoto per URL oder Upload (im Browser auf 1200 px verkleinert und als
+  Data-URL gespeichert); ohne Bild erscheint ein ruhiger Farbverlauf mit Küchensymbol.
+- Detailseite in fester Reihenfolge: Bild → Überblick (Vorbereitung, Gesamtzeit, Aufwand, Basis-
+  Portionen) → Zutaten mit **+/−-Portionsschalter** (Mengen rechnen live um) → nummerierte Anleitung.
 
 **Wochenplan**
-- 7 Tage × vier Slots (Frühstück, Mittag, Abend, Snack), Wochenwechsel per Pfeil oder „Heute".
-- Slots füllen aus vorhandenen Rezepten, mit Freitext („Pizza vom Italiener") oder per
-  KI-Rezept direkt in den Slot.
+- Sieben Tageskarten untereinander (keine Mahlzeiten-Slots): pro Tag ein „+", das Rezepte aus der
+  Sammlung, Freitext oder ein frisches KI-Rezept hinzufügt.
+- Die Rezepte eines Tages stehen als Karten untereinander und lassen sich **per Drag & Drop**
+  sortieren — auch in einen anderen Tag hinein. Auf dem Handy übernehmen Pfeile das Verschieben.
+- Reihenfolge liegt als `position` in der Datenbank (`PUT …/reorder` schreibt sie in einer Transaktion).
 - Tageskalorien werden aus den Nährwerten der geplanten Rezepte summiert.
 - Einkaufsliste aus der Woche: Zutaten werden über alle Rezepte aggregiert, auf die im Slot
   geplante Portionszahl umgerechnet und abhakbar dargestellt; Kopieren als Text.
@@ -61,9 +70,9 @@ Zwei Grundsätze: **jede Person sieht jedes Rezept**, und **Rezepte werden nie g
   in der App (`ALLOW_DEV_RESET_LINK=1`). Link gilt 60 Minuten, ist einmalig.
 - Passwort ändern im Profil; dabei werden alle anderen Sitzungen ungültig (`token_version` im JWT).
 - „Auf allen Geräten abmelden", Datenexport als JSON, Konto löschen (Rezepte bleiben anonymisiert).
-- Einstellungen: Anzeigename, Standard-Portionen, Kalorienziel, Ernährungsform, Allergien,
-  max. Zeit, Standard-Mahlzeiten für die KI-Woche, Auto-Favorit für KI-Rezepte, Design
-  (System/Hell/Dunkel).
+- Einstellungen: Anzeigename; KI-Vorgaben als **feste Klick-Optionen** (Portionen, Ernährungsform,
+  Allergien als Mehrfachauswahl, max. Zeit, Kalorienziel, Auto-Favorit) plus **ein** Freitextfeld
+  „Sonderwünsche"; Design (System/Hell/Dunkel); Passwort, Datenexport, Konto löschen.
 
 **Betrieb**
 - `/api/health` liefert DB-Status, KI-Provider und Uptime; Docker-Healthcheck nutzt diesen Endpunkt.

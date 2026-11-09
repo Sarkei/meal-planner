@@ -110,6 +110,9 @@ export async function initDb(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON users (email_lower);
 
     ALTER TABLE recipes ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS image_url text;
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS total_minutes integer;
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS difficulty text;
     ALTER TABLE recipes ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
     CREATE TABLE IF NOT EXISTS recipe_ratings (
@@ -143,6 +146,26 @@ export async function initDb(): Promise<void> {
       used_at    timestamptz,
       created_at timestamptz NOT NULL DEFAULT now()
     );
+
+    -- Freie Reihenfolge pro Tag: mehrere Mahlzeiten pro Tag, sortierbar per Drag & Drop.
+    ALTER TABLE plan_entries ADD COLUMN IF NOT EXISTS position integer NOT NULL DEFAULT 0;
+    ALTER TABLE plan_entries DROP CONSTRAINT IF EXISTS plan_entries_plan_id_day_index_slot_key;
+    WITH dupes AS (
+      SELECT plan_id, day_index
+        FROM plan_entries
+       GROUP BY plan_id, day_index
+      HAVING count(*) > 1 AND count(*) FILTER (WHERE position <> 0) = 0
+    )
+    UPDATE plan_entries e
+       SET position = sub.rn
+      FROM (
+        SELECT e2.id, row_number() OVER (PARTITION BY e2.plan_id, e2.day_index ORDER BY e2.slot, e2.created_at) - 1 AS rn
+          FROM plan_entries e2
+          JOIN dupes d ON d.plan_id = e2.plan_id AND d.day_index = e2.day_index
+      ) sub
+     WHERE e.id = sub.id;
+    CREATE INDEX IF NOT EXISTS plan_entries_order_idx ON plan_entries (plan_id, day_index, position);
+    ALTER TABLE plan_entries ALTER COLUMN slot SET DEFAULT 'mahlzeit';
 
     CREATE INDEX IF NOT EXISTS recipes_status_idx ON recipes (status, updated_at DESC);
     CREATE INDEX IF NOT EXISTS recipe_ratings_recipe_idx ON recipe_ratings (recipe_id);

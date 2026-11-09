@@ -205,9 +205,10 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
   const constraintParts = [
     (body.constraints ?? '').trim(),
     settings.diet ? `Ernährungsform: ${settings.diet}` : '',
-    settings.allergies ? `Unverträglichkeiten/Allergien: ${settings.allergies}` : '',
+    settings.allergies.length ? `Unverträglichkeiten/Allergien: ${settings.allergies.join(', ')}` : '',
     settings.maxMinutes ? `maximal ${settings.maxMinutes} Minuten Zubereitungszeit` : '',
     settings.kcalTarget ? `grob ${settings.kcalTarget} kcal pro Portion` : '',
+    settings.specialWishes ? `Sonderwünsche: ${settings.specialWishes}` : '',
   ].filter(Boolean);
   try {
     const prompt = fillTemplate(loadPrompt('recipe-draft', 'Erstelle ein Rezept als JSON.'), {
@@ -225,13 +226,9 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
     }
 
     const householdId = await resolveHousehold(String(body.householdId ?? ''), req.userId!);
-    if (!householdId) {
-      fail(res, 400, 'household-required', 'Kein Haushalt gefunden — bitte zuerst einen anlegen.');
-      return;
-    }
     const created = await pool.query<{ id: string }>(
-      `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, tags, source, ingredients, steps, nutrition)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'ai',$8::jsonb,$9::jsonb,$10::jsonb)
+      `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, total_minutes, difficulty, tags, source, ingredients, steps, nutrition)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ai',$10::jsonb,$11::jsonb,$12::jsonb)
        RETURNING id`,
       [
         householdId,
@@ -240,6 +237,8 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
         draft.description,
         draft.servings,
         draft.prepMinutes,
+        draft.totalMinutes,
+        draft.difficulty,
         draft.tags,
         JSON.stringify(draft.ingredients),
         JSON.stringify(draft.steps),
@@ -325,13 +324,16 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
   const constraintParts = [
     (body.constraints ?? '').trim(),
     settings.diet ? `Ernährungsform: ${settings.diet}` : '',
-    settings.allergies ? `Unverträglichkeiten/Allergien: ${settings.allergies}` : '',
+    settings.allergies.length ? `Unverträglichkeiten/Allergien: ${settings.allergies.join(', ')}` : '',
     settings.maxMinutes ? `jede Mahlzeit in maximal ${settings.maxMinutes} Minuten` : '',
     settings.kcalTarget ? `Tagesziel etwa ${settings.kcalTarget} kcal` : '',
+    settings.specialWishes ? `Sonderwünsche: ${settings.specialWishes}` : '',
   ].filter(Boolean);
   const existing = await loadPlan(body.householdId!, weekStart);
-  const existingEntries = (existing.entries as Array<{ title: string; dayIndex: number; slot: string }>) ?? [];
-  const busy = body.mode === 'fill' ? new Set(existingEntries.map((e) => `${e.dayIndex}:${e.slot}`)) : new Set<string>();
+  const existingEntries =
+    (existing.entries as Array<{ title: string; dayIndex: number; slot: string }>) ?? [];
+  // Im Modus „nur leere Slots füllen" bleiben Tage unangetastet, an denen schon etwas hängt.
+  const busyDays = body.mode === 'fill' ? new Set(existingEntries.map((e) => e.dayIndex)) : new Set<number>();
 
   try {
     const prompt = fillTemplate(loadPrompt('week-plan', 'Plane eine Woche als JSON.'), {
@@ -361,13 +363,14 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
     );
     const planId = planRow.rows[0].id;
     let created = 0;
+    const positions = new Map<number, number>();
     for (const day of plan.days) {
       for (const meal of day.meals) {
-        if (busy.has(`${day.dayIndex}:${meal.slot}`)) continue;
+        if (busyDays.has(day.dayIndex)) continue;
         const recipe = normalizeRecipe({ ...meal.recipe, servings: meal.recipe.servings ?? servings });
         const inserted = await pool.query<{ id: string }>(
-          `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, tags, source, ingredients, steps, nutrition)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'ai',$8::jsonb,$9::jsonb,$10::jsonb)
+          `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, total_minutes, difficulty, tags, source, ingredients, steps, nutrition)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ai',$10::jsonb,$11::jsonb,$12::jsonb)
            RETURNING id`,
           [
             body.householdId,
@@ -376,18 +379,20 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
             recipe.description,
             recipe.servings,
             recipe.prepMinutes,
+            recipe.totalMinutes,
+            recipe.difficulty,
             recipe.tags,
             JSON.stringify(recipe.ingredients),
             JSON.stringify(recipe.steps),
             JSON.stringify(recipe.nutrition),
           ],
         );
+        const nextPos = positions.get(day.dayIndex) ?? 0;
+        positions.set(day.dayIndex, nextPos + 1);
         await pool.query(
-          `INSERT INTO plan_entries (plan_id, day_index, slot, recipe_id, servings)
-           VALUES ($1,$2,$3,$4,$5)
-           ON CONFLICT (plan_id, day_index, slot)
-           DO UPDATE SET recipe_id = EXCLUDED.recipe_id, custom_title = NULL, servings = EXCLUDED.servings`,
-          [planId, day.dayIndex, meal.slot, inserted.rows[0].id, servings],
+          `INSERT INTO plan_entries (plan_id, day_index, slot, position, recipe_id, servings)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [planId, day.dayIndex, meal.slot, nextPos, inserted.rows[0].id, servings],
         );
         created += 1;
       }

@@ -43,7 +43,7 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
           />
         </div>
         <div>
-          <label className="label">Zeit in Minuten</label>
+          <label className="label">Vorbereitungszeit (Minuten)</label>
           <input
             type="number"
             min={0}
@@ -51,8 +51,82 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
             className="input"
             value={value.prepMinutes ?? ''}
             onChange={(e) => set('prepMinutes', e.target.value === '' ? null : Number(e.target.value))}
-            placeholder="25"
+            placeholder="15"
           />
+        </div>
+        <div>
+          <label className="label">Gesamtzeit (Minuten)</label>
+          <input
+            type="number"
+            min={0}
+            max={2880}
+            className="input"
+            value={value.totalMinutes ?? ''}
+            onChange={(e) => set('totalMinutes', e.target.value === '' ? null : Number(e.target.value))}
+            placeholder="35"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">Aufwand</label>
+          <div className="flex flex-wrap gap-2">
+            {(['leicht', 'mittel', 'schwer'] as const).map((level) => (
+              <button
+                key={level}
+                type="button"
+                onClick={() => set('difficulty', level)}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                  value.difficulty === level
+                    ? 'border-leaf bg-leaf-soft text-leaf'
+                    : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                }`}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">Bild vom Gericht</label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            {value.imageUrl ? (
+              <div className="relative w-full sm:w-48">
+                <img src={value.imageUrl} alt="Rezeptbild" className="h-28 w-full rounded-xl object-cover" />
+                <button
+                  type="button"
+                  onClick={() => set('imageUrl', null)}
+                  className="absolute top-1 right-1 rounded-lg bg-black/60 p-1 text-white"
+                  aria-label="Bild entfernen"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex h-28 w-full items-center justify-center rounded-xl border border-dashed border-ink/20 text-xs text-ink/40 sm:w-48">
+                noch kein Bild
+              </div>
+            )}
+            <div className="flex-1 space-y-2">
+              <input
+                className="input"
+                value={value.imageUrl?.startsWith('data:') ? '' : value.imageUrl ?? ''}
+                onChange={(e) => set('imageUrl', e.target.value.trim() || null)}
+                placeholder="Bild-URL einfügen (https://…)"
+              />
+              <label className="btn btn-ghost cursor-pointer text-xs">
+                <Plus className="h-3.5 w-3.5" /> Bild hochladen
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void resizeImage(file).then((dataUrl) => set('imageUrl', dataUrl));
+                  }}
+                />
+              </label>
+            </div>
+          </div>
         </div>
         <div className="sm:col-span-2">
           <label className="label">Tags (mit Komma trennen)</label>
@@ -166,12 +240,26 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
   );
 }
 
+/** Bild im Browser auf max. 1200 px verkleinern und als JPEG-Data-URL zurückgeben. */
+async function resizeImage(file: File, maxSize = 1200): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
 export function emptyRecipeDraft(): RecipeDraft {
   return {
     title: '',
     description: '',
     servings: 2,
     prepMinutes: null,
+    totalMinutes: null,
+    difficulty: 'mittel',
+    imageUrl: null,
     tags: [],
     ingredients: [{ name: '', amount: null, unit: '' }],
     steps: [''],

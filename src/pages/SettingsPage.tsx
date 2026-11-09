@@ -16,6 +16,86 @@ import { useAuth } from '../lib/auth';
 import { api, setToken } from '../lib/api';
 import { SLOTS, type Slot, type UserSettings } from '../lib/types';
 
+type Option = { value: string; label: string };
+
+const DIET_OPTIONS: Option[] = [
+  { value: '', label: 'Keine Vorgabe' },
+  { value: 'vegetarisch', label: 'Vegetarisch' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'pescetarisch', label: 'Pescetarisch' },
+  { value: 'low carb', label: 'Low Carb' },
+  { value: 'high protein', label: 'High Protein' },
+  { value: 'glutenfrei', label: 'Glutenfrei' },
+  { value: 'laktosefrei', label: 'Laktosefrei' },
+];
+
+const ALLERGY_OPTIONS = [
+  'Nüsse',
+  'Erdnüsse',
+  'Gluten',
+  'Laktose',
+  'Ei',
+  'Soja',
+  'Fisch',
+  'Meeresfrüchte',
+  'Schweinefleisch',
+  'Pilze',
+  'Sellerie',
+  'Sesam',
+];
+
+const TIME_OPTIONS: Option[] = [
+  { value: '', label: 'Egal' },
+  { value: '15', label: '15 min' },
+  { value: '20', label: '20 min' },
+  { value: '30', label: '30 min' },
+  { value: '45', label: '45 min' },
+  { value: '60', label: '60 min' },
+  { value: '90', label: '90 min' },
+];
+
+const KCAL_OPTIONS: Option[] = [
+  { value: '', label: 'Egal' },
+  { value: '400', label: '400 kcal' },
+  { value: '500', label: '500 kcal' },
+  { value: '600', label: '600 kcal' },
+  { value: '700', label: '700 kcal' },
+  { value: '800', label: '800 kcal' },
+];
+
+function OptionRow({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: Option[];
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <button
+            key={option.value || 'none'}
+            onClick={() => onSelect(option.value)}
+            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+              selected === option.value
+                ? 'border-leaf bg-leaf-soft text-leaf'
+                : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { user, settings, updateSettings, applyTheme, refresh, logout } = useAuth();
   const [name, setName] = useState(user?.displayName ?? '');
@@ -31,6 +111,7 @@ export function SettingsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [wishes, setWishes] = useState(settings.specialWishes);
 
   const saveSettings = async (patch: Partial<UserSettings>) => {
     await updateSettings(patch);
@@ -159,66 +240,102 @@ export function SettingsPage() {
             </p>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-5">
+          <OptionRow
+            label="Portionen (Standard)"
+            options={[1, 2, 3, 4, 6, 8].map((n) => ({ value: String(n), label: `${n}` }))}
+            selected={String(settings.defaultServings)}
+            onSelect={(v) => void saveSettings({ defaultServings: Number(v) })}
+          />
+
+          <OptionRow
+            label="Ernährungsform"
+            options={DIET_OPTIONS}
+            selected={settings.diet}
+            onSelect={(v) => void saveSettings({ diet: v })}
+          />
+
           <div>
-            <label className="label">Portionen (Standard)</label>
-            <input
-              type="number"
-              min={1}
-              max={12}
-              className="input"
-              value={settings.defaultServings}
-              onChange={(e) => void saveSettings({ defaultServings: Number(e.target.value) })}
-            />
+            <label className="label">Allergien & Abneigungen (Mehrfachauswahl)</label>
+            <div className="flex flex-wrap gap-2">
+              {ALLERGY_OPTIONS.map((option) => {
+                const active = settings.allergies.includes(option);
+                return (
+                  <button
+                    key={option}
+                    onClick={() =>
+                      void saveSettings({
+                        allergies: active
+                          ? settings.allergies.filter((a) => a !== option)
+                          : [...settings.allergies, option].slice(0, 12),
+                      })
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div>
-            <label className="label">Kalorienziel pro Portion</label>
-            <input
-              type="number"
-              min={0}
-              className="input"
-              value={settings.kcalTarget ?? ''}
-              onChange={(e) => void saveSettings({ kcalTarget: e.target.value === '' ? null : Number(e.target.value) })}
-              placeholder="optional"
-            />
-          </div>
-          <div>
-            <label className="label">Ernährungsform</label>
-            <input
-              className="input"
-              value={settings.diet}
-              onChange={(e) => void saveSettings({ diet: e.target.value })}
-              placeholder="vegetarisch, vegan, low carb …"
-            />
-          </div>
-          <div>
-            <label className="label">Allergien / Abneigungen</label>
-            <input
-              className="input"
-              value={settings.allergies}
-              onChange={(e) => void saveSettings({ allergies: e.target.value })}
-              placeholder="Nüsse, Laktose, Pilze …"
-            />
-          </div>
-          <div>
-            <label className="label">Max. Zubereitungszeit (Minuten)</label>
-            <input
-              type="number"
-              min={0}
-              className="input"
-              value={settings.maxMinutes ?? ''}
-              onChange={(e) => void saveSettings({ maxMinutes: e.target.value === '' ? null : Number(e.target.value) })}
-              placeholder="optional"
-            />
-          </div>
+
+          <OptionRow
+            label="Max. Zubereitungszeit"
+            options={TIME_OPTIONS}
+            selected={settings.maxMinutes == null ? '' : String(settings.maxMinutes)}
+            onSelect={(v) => void saveSettings({ maxMinutes: v === '' ? null : Number(v) })}
+          />
+
+          <OptionRow
+            label="Kalorienziel pro Portion"
+            options={KCAL_OPTIONS}
+            selected={settings.kcalTarget == null ? '' : String(settings.kcalTarget)}
+            onSelect={(v) => void saveSettings({ kcalTarget: v === '' ? null : Number(v) })}
+          />
+
           <div>
             <label className="label">KI-Rezepte automatisch als Favorit</label>
-            <button
-              className={`btn w-full ${settings.aiAutoFavorite ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => void saveSettings({ aiAutoFavorite: !settings.aiAutoFavorite })}
-            >
-              {settings.aiAutoFavorite ? 'An — landet direkt bei Favoriten' : 'Aus'}
-            </button>
+            <div className="flex gap-2">
+              {[
+                { value: true, label: 'Ja — landet direkt bei Favoriten' },
+                { value: false, label: 'Nein' },
+              ].map((option) => (
+                <button
+                  key={String(option.value)}
+                  onClick={() => void saveSettings({ aiAutoFavorite: option.value })}
+                  className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                    settings.aiAutoFavorite === option.value
+                      ? 'border-leaf bg-leaf-soft text-leaf'
+                      : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Sonderwünsche für die KI</label>
+            <textarea
+              className="textarea"
+              rows={3}
+              value={wishes}
+              onChange={(e) => setWishes(e.target.value)}
+              placeholder="z. B. mag keine Rosinen, Kinder essen gern Nudeln, bitte viel Gemüse, keine Fertigprodukte"
+            />
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                className="btn btn-ghost !px-3 !py-1.5 text-xs"
+                onClick={() => void saveSettings({ specialWishes: wishes })}
+                disabled={wishes === settings.specialWishes}
+              >
+                <Save className="h-3.5 w-3.5" /> Sonderwünsche speichern
+              </button>
+              {wishes !== settings.specialWishes && <span className="text-[11px] text-ink/45">noch nicht gespeichert</span>}
+            </div>
           </div>
         </div>
         <div>

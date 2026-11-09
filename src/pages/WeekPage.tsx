@@ -1,38 +1,47 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ClipboardList,
+  GripVertical,
   Loader2,
   Plus,
   Sparkles,
   Trash2,
   UtensilsCrossed,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { addDays, api, formatDayMonth, formatWeekLabel, mondayOf } from '../lib/api';
-import { SLOTS, WEEKDAYS, type PlanEntry, type Recipe, type ShoppingItem, type Slot, type WeekPlan } from '../lib/types';
+import { addDays, api, formatDayMonth, formatWeekLabel, mondayOf, toYmd } from '../lib/api';
+import { WEEKDAYS, type PlanEntry, type Recipe, type ShoppingItem, type WeekPlan } from '../lib/types';
 import { Modal } from '../components/Modal';
 
-const GRID_SLOTS: Slot[] = ['fruehstueck', 'mittag', 'abend', 'snack'];
+const EMPTY_DAYS: PlanEntry[][] = [[], [], [], [], [], [], []];
+
+type DropTarget = { dayIndex: number; index: number } | null;
 
 export function WeekPage() {
-  const { activeHousehold } = useAuth();
+  const { activeHousehold, settings } = useAuth();
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [slotTarget, setSlotTarget] = useState<{ dayIndex: number; slot: Slot } | null>(null);
+  const [pickerDay, setPickerDay] = useState<number | null>(null);
   const [showAi, setShowAi] = useState(false);
   const [showShopping, setShowShopping] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget>(null);
+  const [busy, setBusy] = useState(false);
+  const dragRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!activeHousehold) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await api<WeekPlan>(`/plans/${activeHousehold.id}/${weekStart}`);
-      setPlan(data);
+      setPlan(await api<WeekPlan>(`/plans/${activeHousehold.id}/${weekStart}`));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Woche konnte nicht geladen werden.');
     } finally {
@@ -44,46 +53,116 @@ export function WeekPage() {
     void load();
   }, [load]);
 
-  const byDaySlot = useMemo(() => {
-    const map = new Map<string, PlanEntry>();
-    for (const entry of plan?.entries ?? []) map.set(`${entry.dayIndex}:${entry.slot}`, entry);
-    return map;
+  const byDay = useMemo(() => {
+    const days: PlanEntry[][] = EMPTY_DAYS.map(() => []);
+    for (const entry of plan?.entries ?? []) {
+      if (days[entry.dayIndex]) days[entry.dayIndex].push(entry);
+    }
+    for (const day of days) day.sort((a, b) => a.position - b.position);
+    return days;
   }, [plan]);
 
-  const dayTotals = useMemo(() => {
-    const totals = new Array(7).fill(0) as number[];
-    for (const entry of plan?.entries ?? []) {
-      totals[entry.dayIndex] += Number(entry.nutrition?.kcal ?? 0);
-    }
-    return totals;
-  }, [plan]);
+  const kcalPerDay = useMemo(
+    () => byDay.map((entries) => entries.reduce((sum, e) => sum + Number(e.nutrition?.kcal ?? 0), 0)),
+    [byDay],
+  );
 
   if (!activeHousehold) {
-    return <p className="card p-6 text-sm text-ink/60">Kein Haushalt gefunden — bitte im Tab „Haushalt" einen anlegen.</p>;
+    return (
+      <div className="card p-6">
+        <p className="font-display text-lg font-bold">Noch kein Haushalt</p>
+        <p className="mt-1 max-w-md text-sm text-ink/55">
+          Wochenpläne hängen an einem Haushalt. Leg einen an oder tritt mit einem Einladungscode bei — Rezepte kannst du
+          auch ohne anlegen und sammeln.
+        </p>
+        <button className="btn btn-primary mt-4" onClick={() => window.location.assign('#/household')}>
+          Zu den Haushalten
+        </button>
+      </div>
+    );
   }
 
   const removeEntry = async (entry: PlanEntry) => {
+    setBusy(true);
     try {
-      const data = await api<WeekPlan>(`/plans/${activeHousehold.id}/${weekStart}/entry/${entry.id}`, {
-        method: 'DELETE',
-      });
-      setPlan(data);
+      setPlan(await api<WeekPlan>(`/plans/${activeHousehold.id}/${weekStart}/entry/${entry.id}`, { method: 'DELETE' }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Eintrag konnte nicht entfernt werden.');
+    } finally {
+      setBusy(false);
     }
   };
 
+  /** Alles neu nummerieren und speichern — Basis für Drag & Drop und die Pfeiltasten. */
+  const persistOrder = async (days: PlanEntry[][]) => {
+    const items: Array<{ id: string; dayIndex: number; position: number }> = [];
+    days.forEach((entries, dayIndex) => {
+      entries.forEach((entry, position) => items.push({ id: entry.id, dayIndex, position }));
+    });
+    const optimisticEntries: PlanEntry[] = [];
+    days.forEach((entries, dayIndex) => {
+      entries.forEach((entry, position) => optimisticEntries.push({ ...entry, dayIndex, position }));
+    });
+    setPlan((prev) => (prev ? { ...prev, entries: optimisticEntries } : prev));
+    try {
+      const updated = await api<WeekPlan>(`/plans/${activeHousehold.id}/${weekStart}/reorder`, {
+        method: 'PUT',
+        body: { items },
+      });
+      setPlan(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Reihenfolge konnte nicht gespeichert werden.');
+      void load();
+    }
+  };
+
+  const moveEntry = (entryId: string, toDay: number, toIndex: number) => {
+    const days = byDay.map((entries) => [...entries]);
+    let moved: PlanEntry | undefined;
+    for (const entries of days) {
+      const idx = entries.findIndex((e) => e.id === entryId);
+      if (idx >= 0) {
+        moved = entries[idx];
+        entries.splice(idx, 1);
+        break;
+      }
+    }
+    if (!moved) return;
+    const target = days[toDay];
+    const insertAt = Math.max(0, Math.min(toIndex, target.length));
+    target.splice(insertAt, 0, moved);
+    void persistOrder(days);
+  };
+
+  const nudge = (entry: PlanEntry, direction: -1 | 1) => {
+    const entries = byDay[entry.dayIndex];
+    const index = entries.findIndex((e) => e.id === entry.id);
+    const next = index + direction;
+    if (next < 0 || next >= entries.length) return;
+    moveEntry(entry.id, entry.dayIndex, direction === 1 ? next + 1 : next);
+  };
+
+  const handleDrop = (dayIndex: number, index?: number) => {
+    const id = dragRef.current;
+    setDropTarget(null);
+    setDraggingId(null);
+    dragRef.current = null;
+    if (!id) return;
+    const target = index ?? byDay[dayIndex].length;
+    moveEntry(id, dayIndex, target);
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="label !mb-0">Wochenplan · {activeHousehold.name}</p>
-          <div className="mt-1 flex items-center gap-2">
-            <button className="rounded-lg p-1.5 hover:bg-ink/5" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+          <p className="label !mb-0">Woche · {activeHousehold.name}</p>
+          <div className="mt-1 flex items-center gap-1">
+            <button className="rounded-lg p-1.5 hover:bg-ink/5" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Vorherige Woche">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="font-display text-lg font-bold">{formatWeekLabel(weekStart)}</span>
-            <button className="rounded-lg p-1.5 hover:bg-ink/5" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+            <button className="rounded-lg p-1.5 hover:bg-ink/5" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Nächste Woche">
               <ChevronRight className="h-4 w-4" />
             </button>
             <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => setWeekStart(mondayOf(new Date()))}>
@@ -108,120 +187,179 @@ export function WeekPage() {
           <Loader2 className="h-4 w-4 animate-spin" /> Woche wird geladen …
         </div>
       ) : (
-        <>
-          {/* Desktop: 7 Spalten */}
-          <div className="hidden gap-3 lg:grid lg:grid-cols-7">
-            {WEEKDAYS.map((day, dayIndex) => (
-              <div key={day} className="card flex flex-col gap-2 p-3">
-                <div className="flex items-baseline justify-between">
-                  <p className="text-xs font-bold uppercase tracking-wide text-ink/60">{day.slice(0, 2)}</p>
-                  <p className="text-[10px] text-ink/35">{formatDayMonth(addDays(weekStart, dayIndex))}</p>
-                </div>
-                {GRID_SLOTS.map((slot) => {
-                  const entry = byDaySlot.get(`${dayIndex}:${slot}`);
-                  const label = SLOTS.find((s) => s.id === slot)!.label;
-                  return entry ? (
-                    <div key={slot} className="group rounded-xl border border-leaf/20 bg-leaf-soft/60 p-2">
-                      <p className="text-[9px] font-bold uppercase tracking-wide text-leaf/80">{label}</p>
-                      <p className="mt-0.5 text-xs leading-snug font-semibold">{entry.title}</p>
-                      <div className="mt-1 flex items-center justify-between">
-                        <button
-                          className="text-[10px] font-semibold text-leaf/80 hover:underline"
-                          onClick={() => window.location.assign(`#/recipe/${entry.recipeId ?? ''}`)}
-                          disabled={!entry.recipeId}
-                        >
-                          {entry.recipeId ? 'Öffnen' : ''}
-                        </button>
-                        <button
-                          className="opacity-0 transition group-hover:opacity-100"
-                          onClick={() => void removeEntry(entry)}
-                          aria-label="Entfernen"
-                        >
-                          <Trash2 className="h-3 w-3 text-ink/40 hover:text-clay" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
+        <div className="mx-auto w-full max-w-3xl space-y-3">
+          {WEEKDAYS.map((day, dayIndex) => {
+            const isToday = addDays(weekStart, dayIndex) === toYmd(new Date());
+            const entries = byDay[dayIndex];
+            const isDropDay = dropTarget?.dayIndex === dayIndex;
+            return (
+              <section
+                key={day}
+                className={`card p-4 transition ${isDropDay ? 'ring-2 ring-leaf/40' : ''}`}
+                onDragOver={(e) => {
+                  if (!dragRef.current) return;
+                  e.preventDefault();
+                  if (dropTarget?.dayIndex !== dayIndex || dropTarget?.index !== entries.length) {
+                    setDropTarget({ dayIndex, index: entries.length });
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setDropTarget((prev) => (prev?.dayIndex === dayIndex ? null : prev));
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDrop(dayIndex);
+                }}
+              >
+                <header className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="font-display text-base font-bold">{day}</h2>
+                    <span className="text-[11px] text-ink/40">{formatDayMonth(addDays(weekStart, dayIndex))}</span>
+                    {isToday && <span className="chip">heute</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {kcalPerDay[dayIndex] > 0 && (
+                      <span className="text-[11px] font-semibold text-ink/45">≈ {Math.round(kcalPerDay[dayIndex])} kcal</span>
+                    )}
                     <button
-                      key={slot}
-                      onClick={() => setSlotTarget({ dayIndex, slot })}
-                      className="group flex min-h-[62px] flex-col items-start justify-center rounded-xl border border-dashed border-ink/15 px-2 py-1.5 text-left hover:border-leaf/40 hover:bg-leaf-soft/30"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-ink/15 text-leaf transition hover:border-leaf hover:bg-leaf-soft"
+                      onClick={() => setPickerDay(dayIndex)}
+                      aria-label={`Rezept zu ${day} hinzufügen`}
+                      title={`Rezept zu ${day} hinzufügen`}
                     >
-                      <span className="text-[9px] font-bold uppercase tracking-wide text-ink/35">{label}</span>
-                      <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-ink/35 group-hover:text-leaf">
-                        <Plus className="h-3 w-3" /> hinzufügen
-                      </span>
+                      <Plus className="h-4 w-4" />
                     </button>
-                  );
-                })}
-                <p className="mt-auto pt-1 text-[10px] font-semibold text-ink/40">
-                  {dayTotals[dayIndex] > 0 ? `≈ ${Math.round(dayTotals[dayIndex])} kcal` : '—'}
-                </p>
-              </div>
-            ))}
-          </div>
+                  </div>
+                </header>
 
-          {/* Mobil: Tage untereinander */}
-          <div className="space-y-3 lg:hidden">
-            {WEEKDAYS.map((day, dayIndex) => (
-              <div key={day} className="card p-3">
-                <div className="mb-2 flex items-baseline justify-between">
-                  <p className="text-sm font-bold">{day}</p>
-                  <p className="text-[11px] text-ink/40">
-                    {formatDayMonth(addDays(weekStart, dayIndex))}
-                    {dayTotals[dayIndex] > 0 ? ` · ≈ ${Math.round(dayTotals[dayIndex])} kcal` : ''}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  {GRID_SLOTS.map((slot) => {
-                    const entry = byDaySlot.get(`${dayIndex}:${slot}`);
-                    const label = SLOTS.find((s) => s.id === slot)!.label;
-                    return entry ? (
-                      <div key={slot} className="flex items-center justify-between rounded-xl bg-leaf-soft/60 px-3 py-2">
-                        <div>
-                          <p className="text-[9px] font-bold uppercase tracking-wide text-leaf/80">{label}</p>
-                          <p className="text-sm font-semibold">{entry.title}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {entry.recipeId && (
+                {entries.length === 0 ? (
+                  <button
+                    onClick={() => setPickerDay(dayIndex)}
+                    className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-4 text-xs font-semibold transition ${
+                      isDropDay ? 'border-leaf bg-leaf-soft/40 text-leaf' : 'border-ink/15 text-ink/40 hover:border-leaf/40 hover:text-leaf'
+                    }`}
+                  >
+                    <UtensilsCrossed className="h-4 w-4" /> Noch nichts geplant — hierher ziehen oder antippen
+                  </button>
+                ) : (
+                  <ul className="space-y-2">
+                    {entries.map((entry, index) => {
+                      const isDragging = draggingId === entry.id;
+                      const showLineBefore = dropTarget?.dayIndex === dayIndex && dropTarget.index === index;
+                      return (
+                        <li key={entry.id}>
+                          {showLineBefore && <div className="mb-1 h-0.5 rounded-full bg-leaf" />}
+                          <div
+                            draggable
+                            onDragStart={(e) => {
+                              dragRef.current = entry.id;
+                              setDraggingId(entry.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('text/plain', entry.id);
+                            }}
+                            onDragEnd={() => {
+                              dragRef.current = null;
+                              setDraggingId(null);
+                              setDropTarget(null);
+                            }}
+                            onDragOver={(e) => {
+                              if (!dragRef.current) return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const after = e.clientY > rect.top + rect.height / 2;
+                              setDropTarget({ dayIndex, index: after ? index + 1 : index });
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDrop(dayIndex, dropTarget?.index ?? index);
+                            }}
+                            className={`group flex items-center gap-2 rounded-xl border border-ink/10 bg-white px-2 py-2 transition ${
+                              isDragging ? 'opacity-40' : 'hover:border-leaf/40'
+                            }`}
+                          >
+                            <span className="cursor-grab text-ink/25 active:cursor-grabbing" title="Ziehen zum Sortieren">
+                              <GripVertical className="h-4 w-4" />
+                            </span>
+
+                            <div className="min-w-0 flex-1">
+                              {entry.recipeId ? (
+                                <button
+                                  className="block max-w-full truncate text-left text-sm font-semibold hover:text-leaf"
+                                  onClick={() => window.location.assign(`#/recipe/${entry.recipeId}`)}
+                                >
+                                  {entry.title}
+                                </button>
+                              ) : (
+                                <p className="truncate text-sm font-semibold">{entry.title}</p>
+                              )}
+                              <p className="mt-0.5 text-[11px] text-ink/45">
+                                {[
+                                  entry.prepMinutes ? `${entry.prepMinutes} min` : '',
+                                  entry.servings ? `${entry.servings} Port.` : '',
+                                  entry.nutrition?.kcal ? `${Math.round(Number(entry.nutrition.kcal))} kcal` : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ') || 'ohne Angaben'}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col gap-0.5 sm:hidden">
+                              <button
+                                className="rounded p-0.5 text-ink/35 disabled:opacity-20"
+                                onClick={() => nudge(entry, -1)}
+                                disabled={index === 0}
+                                aria-label="Nach oben"
+                              >
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                className="rounded p-0.5 text-ink/35 disabled:opacity-20"
+                                onClick={() => nudge(entry, 1)}
+                                disabled={index === entries.length - 1}
+                                aria-label="Nach unten"
+                              >
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+
                             <button
-                              className="text-[11px] font-semibold text-leaf"
-                              onClick={() => window.location.assign(`#/recipe/${entry.recipeId}`)}
+                              className="rounded-lg p-1.5 text-ink/30 transition hover:bg-red-50 hover:text-clay"
+                              onClick={() => void removeEntry(entry)}
+                              disabled={busy}
+                              aria-label="Aus dem Tag entfernen"
                             >
-                              Öffnen
+                              <Trash2 className="h-4 w-4" />
                             </button>
-                          )}
-                          <button onClick={() => void removeEntry(entry)} aria-label="Entfernen">
-                            <Trash2 className="h-4 w-4 text-ink/35" />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        key={slot}
-                        onClick={() => setSlotTarget({ dayIndex, slot })}
-                        className="flex w-full items-center gap-2 rounded-xl border border-dashed border-ink/15 px-3 py-2 text-left text-xs font-semibold text-ink/45 hover:border-leaf/40 hover:text-leaf"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> {label} hinzufügen
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+                          </div>
+                        </li>
+                      );
+                    })}
+                    {isDropDay && dropTarget?.index === entries.length && <div className="mt-1 h-0.5 rounded-full bg-leaf" />}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+          <p className="pb-2 text-center text-[11px] text-ink/40">
+            Rezepte lassen sich mit der Maus in der Tageskarte sortieren und in andere Tage ziehen — auf dem Handy mit den Pfeilen.
+          </p>
+        </div>
       )}
 
-      {slotTarget && (
-        <SlotPicker
+      {pickerDay !== null && (
+        <DayPicker
           householdId={activeHousehold.id}
           weekStart={weekStart}
-          target={slotTarget}
-          onClose={() => setSlotTarget(null)}
+          dayIndex={pickerDay}
+          servings={settings.defaultServings}
+          onClose={() => setPickerDay(null)}
           onSaved={(next) => {
             setPlan(next);
-            setSlotTarget(null);
+            setPickerDay(null);
           }}
         />
       )}
@@ -231,9 +369,7 @@ export function WeekPage() {
           householdId={activeHousehold.id}
           weekStart={weekStart}
           onClose={() => setShowAi(false)}
-          onDone={(next) => {
-            setPlan(next);
-          }}
+          onDone={(next) => setPlan(next)}
         />
       )}
 
@@ -242,16 +378,18 @@ export function WeekPage() {
   );
 }
 
-function SlotPicker({
+function DayPicker({
   householdId,
   weekStart,
-  target,
+  dayIndex,
+  servings,
   onClose,
   onSaved,
 }: {
   householdId: string;
   weekStart: string;
-  target: { dayIndex: number; slot: Slot };
+  dayIndex: number;
+  servings: number;
   onClose: () => void;
   onSaved: (plan: WeekPlan) => void;
 }) {
@@ -262,7 +400,6 @@ function SlotPicker({
   const [idea, setIdea] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const slotLabel = SLOTS.find((s) => s.id === target.slot)!.label;
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -274,65 +411,32 @@ function SlotPicker({
       }
     }, 200);
     return () => clearTimeout(t);
-  }, [householdId, query]);
+  }, [query]);
 
-  const put = async (body: { recipeId?: string; customTitle?: string }) => {
-    const plan = await api<WeekPlan>(`/plans/${householdId}/${weekStart}/entry`, {
-      method: 'PUT',
-      body: { dayIndex: target.dayIndex, slot: target.slot, ...body },
+  const add = async (body: { recipeId?: string; customTitle?: string }) => {
+    const plan = await api<WeekPlan>(`/plans/${householdId}/${weekStart}/entries`, {
+      method: 'POST',
+      body: { dayIndex, servings, ...body },
     });
     onSaved(plan);
   };
 
-  const assignRecipe = async (recipeId: string) => {
+  const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
-      await put({ recipeId });
+      await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Konnte nicht gespeichert werden.');
-      setBusy(false);
-    }
-  };
-
-  const saveText = async () => {
-    if (!customTitle.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await put({ customTitle: customTitle.trim() });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Konnte nicht gespeichert werden.');
-      setBusy(false);
-    }
-  };
-
-  const generateAndAssign = async () => {
-    if (idea.trim().length < 3) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const data = await api<{ recipe: Recipe }>('/ai/recipe', {
-        method: 'POST',
-        body: { householdId, idea, servings: 2, save: 'favorite' },
-      });
-      await put({ recipeId: data.recipe.id });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'KI konnte das Rezept nicht erstellen.');
+      setError(e instanceof Error ? e.message : 'Konnte nicht speichern.');
       setBusy(false);
     }
   };
 
   return (
-    <Modal
-      title={`${slotLabel} · ${WEEKDAYS[target.dayIndex]}`}
-      subtitle="Rezept auswählen, eigenen Eintrag setzen oder die KI fragen"
-      onClose={onClose}
-      wide
-    >
+    <Modal title={`${WEEKDAYS[dayIndex]} — Rezept hinzufügen`} subtitle="Aus der Sammlung, als Freitext oder neu von der KI" onClose={onClose} wide>
       <div className="mb-4 flex gap-1 rounded-xl bg-ink/5 p-1 text-sm font-semibold">
         {[
-          { id: 'recipe' as const, label: 'Rezept' },
+          { id: 'recipe' as const, label: 'Sammlung' },
           { id: 'text' as const, label: 'Freitext' },
           { id: 'ai' as const, label: 'KI-Rezept' },
         ].map((t) => (
@@ -348,12 +452,7 @@ function SlotPicker({
 
       {tab === 'recipe' && (
         <div className="space-y-3">
-          <input
-            className="input"
-            placeholder="Rezept suchen …"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <input className="input" placeholder="Rezept suchen …" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="max-h-[45vh] space-y-2 overflow-y-auto">
             {recipes.length === 0 && (
               <p className="flex items-center gap-2 p-4 text-sm text-ink/50">
@@ -363,16 +462,16 @@ function SlotPicker({
             {recipes.map((r) => (
               <button
                 key={r.id}
-                onClick={() => void assignRecipe(r.id)}
+                onClick={() => void run(() => add({ recipeId: r.id }))}
                 disabled={busy}
                 className="flex w-full items-center justify-between rounded-xl border border-ink/10 px-3 py-2 text-left hover:border-leaf/40 hover:bg-leaf-soft/30"
               >
                 <span>
                   <span className="block text-sm font-semibold">{r.title}</span>
                   <span className="text-[11px] text-ink/50">
-                    {r.prepMinutes ? `${r.prepMinutes} min · ` : ''}
-                    {r.servings} Portionen
-                    {r.nutrition?.kcal ? ` · ${Math.round(r.nutrition.kcal)} kcal` : ''}
+                    {[r.prepMinutes ? `${r.prepMinutes} min` : '', `${r.servings} Portionen`, r.nutrition?.kcal ? `${Math.round(r.nutrition.kcal)} kcal` : '']
+                      .filter(Boolean)
+                      .join(' · ')}
                   </span>
                 </span>
                 <Plus className="h-4 w-4 text-leaf" />
@@ -390,10 +489,14 @@ function SlotPicker({
               className="input"
               value={customTitle}
               onChange={(e) => setCustomTitle(e.target.value)}
-              placeholder="z. B. Pizza vom Italiener"
+              placeholder="z. B. Pizza vom Italiener, Reste vom Vortag"
             />
           </div>
-          <button className="btn btn-primary w-full" onClick={() => void saveText()} disabled={busy || !customTitle.trim()}>
+          <button
+            className="btn btn-primary w-full"
+            onClick={() => void run(async () => add({ customTitle: customTitle.trim() }))}
+            disabled={busy || !customTitle.trim()}
+          >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />} Eintragen
           </button>
         </div>
@@ -402,7 +505,7 @@ function SlotPicker({
       {tab === 'ai' && (
         <div className="space-y-3">
           <div>
-            <label className="label">Idee für dieses Gericht</label>
+            <label className="label">Idee für diesen Tag</label>
             <textarea
               className="textarea"
               rows={3}
@@ -411,13 +514,23 @@ function SlotPicker({
               placeholder="z. B. etwas Schnelles mit Kürbis, vegetarisch, max. 30 Minuten"
             />
           </div>
-          <button className="btn btn-primary w-full" onClick={() => void generateAndAssign()} disabled={busy || idea.trim().length < 3}>
+          <button
+            className="btn btn-primary w-full"
+            onClick={() =>
+              void run(async () => {
+                const data = await api<{ recipe: Recipe }>('/ai/recipe', {
+                  method: 'POST',
+                  body: { householdId, idea, servings, save: 'favorite' },
+                });
+                await add({ recipeId: data.recipe.id });
+              })
+            }
+            disabled={busy || idea.trim().length < 3}
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Rezept erzeugen und eintragen
+            {busy ? 'Rezept wird geschrieben …' : 'Rezept erzeugen und einplanen'}
           </button>
-          <p className="text-[11px] text-ink/50">
-            Das Rezept wird gespeichert und landet direkt im Slot. Feinschliff geht danach im Rezept-Editor.
-          </p>
+          <p className="text-[11px] text-ink/50">Das Rezept landet zusätzlich in deinen Favoriten.</p>
         </div>
       )}
 
@@ -439,16 +552,15 @@ function AiWeekModal({
 }) {
   const { settings } = useAuth();
   const [servings, setServings] = useState(settings.defaultServings ?? 2);
-  const [slots, setSlots] = useState<Slot[]>(settings.defaultSlots ?? ['abend']);
+  const [mealsPerDay, setMealsPerDay] = useState(1);
   const [constraints, setConstraints] = useState('');
   const [mode, setMode] = useState<'replace' | 'fill'>('replace');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
 
-  const toggleSlot = (slot: Slot) => {
-    setSlots((prev) => (prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]));
-  };
+  const slotsFor = (count: number) =>
+    count <= 1 ? ['abend'] : count === 2 ? ['mittag', 'abend'] : ['fruehstueck', 'mittag', 'abend'];
 
   const run = async () => {
     setBusy(true);
@@ -456,7 +568,7 @@ function AiWeekModal({
     try {
       const data = await api<{ plan: WeekPlan; created: number; notes: string }>('/ai/week', {
         method: 'POST',
-        body: { householdId, weekStart, servings, slots, constraints, mode },
+        body: { householdId, weekStart, servings, slots: slotsFor(mealsPerDay), constraints, mode },
       });
       setNotes(`${data.created} Mahlzeiten geplant. ${data.notes}`.trim());
       onDone(data.plan);
@@ -483,54 +595,45 @@ function AiWeekModal({
             />
           </div>
           <div>
-            <label className="label">Modus</label>
-            <select className="select" value={mode} onChange={(e) => setMode(e.target.value as 'replace' | 'fill')}>
-              <option value="replace">Woche neu planen</option>
-              <option value="fill">Nur leere Slots füllen</option>
+            <label className="label">Mahlzeiten pro Tag</label>
+            <select className="select" value={mealsPerDay} onChange={(e) => setMealsPerDay(Number(e.target.value))}>
+              <option value={1}>1 (Abendessen)</option>
+              <option value={2}>2 (Mittag + Abend)</option>
+              <option value={3}>3 (Frühstück, Mittag, Abend)</option>
             </select>
           </div>
         </div>
 
         <div>
-          <label className="label">Welche Mahlzeiten?</label>
-          <div className="flex flex-wrap gap-2">
-            {SLOTS.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => toggleSlot(s.id)}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                  slots.includes(s.id)
-                    ? 'border-leaf bg-leaf-soft text-leaf'
-                    : 'border-ink/15 text-ink/55 hover:border-leaf/40'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <label className="label">Modus</label>
+          <select className="select" value={mode} onChange={(e) => setMode(e.target.value as 'replace' | 'fill')}>
+            <option value="replace">Woche neu planen</option>
+            <option value="fill">Nur leere Tage füllen</option>
+          </select>
         </div>
 
-        <p className="text-[11px] text-ink/45">
-          Aus deinem Profil: {[settings.diet, settings.allergies, settings.maxMinutes ? `${settings.maxMinutes} min` : '', settings.kcalTarget ? `${settings.kcalTarget} kcal` : '']
-            .filter(Boolean)
-            .join(' · ') || 'noch keine Vorgaben hinterlegt'}
-        </p>
         <div>
-          <label className="label">Vorgaben (optional)</label>
+          <label className="label">Zusatz-Vorgaben (optional)</label>
           <textarea
             className="textarea"
             rows={3}
             value={constraints}
             onChange={(e) => setConstraints(e.target.value)}
-            placeholder="z. B. vegetarisch, keine Nüsse, unter 45 Minuten, ca. 2000 kcal am Tag, Kinder mögen kein Gemüse"
+            placeholder="z. B. unter 45 Minuten, keine Nüsse, Kinder mögen kein Gemüse"
           />
         </div>
 
-        <button className="btn btn-primary w-full" onClick={() => void run()} disabled={busy || slots.length === 0}>
+        <p className="text-[11px] text-ink/45">
+          Aus deinem Profil:{' '}
+          {[settings.diet, settings.allergies?.join(', '), settings.maxMinutes ? `${settings.maxMinutes} min` : '', settings.kcalTarget ? `${settings.kcalTarget} kcal` : '', settings.specialWishes]
+            .filter(Boolean)
+            .join(' · ') || 'noch keine Vorgaben hinterlegt'}
+        </p>
+
+        <button className="btn btn-primary w-full" onClick={() => void run()} disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {busy ? 'Woche wird geplant …' : 'Woche planen'}
         </button>
-        {busy && <p className="text-center text-[11px] text-ink/50">Das kann 20–60 Sekunden dauern.</p>}
         {notes && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm text-leaf">{notes}</p>}
         {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       </div>
@@ -538,15 +641,7 @@ function AiWeekModal({
   );
 }
 
-function ShoppingModal({
-  householdId,
-  weekStart,
-  onClose,
-}: {
-  householdId: string;
-  weekStart: string;
-  onClose: () => void;
-}) {
+function ShoppingModal({ householdId, weekStart, onClose }: { householdId: string; weekStart: string; onClose: () => void }) {
   const [items, setItems] = useState<ShoppingItem[] | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -563,20 +658,17 @@ function ShoppingModal({
     })();
   }, [householdId, weekStart]);
 
-  const toggle = (key: string) => {
+  const toggle = (key: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  };
 
   const copy = async () => {
     if (!items) return;
-    const text = items
-      .map((i) => `${i.approximated ? '~' : ''}${i.amount ? `${i.amount} ${i.unit} ` : ''}${i.name}`.trim())
-      .join('\n');
+    const text = items.map((i) => `${i.approximated ? '~' : ''}${i.amount ? `${i.amount} ${i.unit} ` : ''}${i.name}`.trim()).join('\n');
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -602,19 +694,14 @@ function ShoppingModal({
     >
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       {!items && !error && <p className="p-4 text-sm text-ink/50">Wird geladen …</p>}
-      {items && items.length === 0 && (
-        <p className="p-4 text-sm text-ink/50">Für diese Woche sind noch keine Rezepte eingeplant.</p>
-      )}
+      {items && items.length === 0 && <p className="p-4 text-sm text-ink/50">Für diese Woche sind noch keine Rezepte eingeplant.</p>}
       <ul className="divide-y divide-ink/5">
         {items?.map((item) => {
           const key = `${item.name}|${item.unit}`;
           const isChecked = checked.has(key);
           return (
             <li key={key}>
-              <button
-                className="flex w-full items-center gap-3 py-2 text-left"
-                onClick={() => toggle(key)}
-              >
+              <button className="flex w-full items-center gap-3 py-2 text-left" onClick={() => toggle(key)}>
                 <span
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
                     isChecked ? 'border-leaf bg-leaf text-white' : 'border-ink/25'

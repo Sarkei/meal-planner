@@ -96,22 +96,24 @@ export type UserSettings = {
   theme: 'system' | 'light' | 'dark';
   defaultServings: number;
   diet: string;
-  allergies: string;
+  allergies: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
   defaultSlots: string[];
+  specialWishes: string;
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'system',
   defaultServings: 2,
   diet: '',
-  allergies: '',
+  allergies: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,
   defaultSlots: ['abend'],
+  specialWishes: '',
 };
 
 export function mergeSettings(raw: unknown): UserSettings {
@@ -123,11 +125,19 @@ export function mergeSettings(raw: unknown): UserSettings {
     theme: value.theme === 'light' || value.theme === 'dark' || value.theme === 'system' ? value.theme : DEFAULT_SETTINGS.theme,
     defaultServings: Math.min(12, Math.max(1, Number(value.defaultServings ?? DEFAULT_SETTINGS.defaultServings) || 2)),
     diet: String(value.diet ?? '').slice(0, 120),
-    allergies: String(value.allergies ?? '').slice(0, 200),
+    // Altbestand hatte hier einen Freitext — der wird in eine Liste zerlegt.
+    allergies: Array.isArray(value.allergies)
+      ? value.allergies.map((a) => String(a).slice(0, 40)).filter(Boolean).slice(0, 12)
+      : String(value.allergies ?? '')
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean)
+          .slice(0, 12),
     maxMinutes: value.maxMinutes != null && Number.isFinite(Number(value.maxMinutes)) ? Number(value.maxMinutes) : null,
     kcalTarget: value.kcalTarget != null && Number.isFinite(Number(value.kcalTarget)) ? Number(value.kcalTarget) : null,
     aiAutoFavorite: value.aiAutoFavorite !== false,
     defaultSlots: slots?.length ? slots : DEFAULT_SETTINGS.defaultSlots,
+    specialWishes: String(value.specialWishes ?? '').slice(0, 400),
   };
 }
 
@@ -197,11 +207,11 @@ authRouter.post('/register', async (req, res) => {
       [email.toLowerCase(), email.toLowerCase(), hash, displayName],
     );
     const user = created.rows[0];
-    const household = await createHouseholdWithOwner(`Küche von ${displayName.split(' ')[0]}`, user.id);
+    // Bewusst kein automatischer Haushalt: Der Nutzer legt selbst einen an oder tritt einem bei.
     res.status(201).json({
       token: signToken(user.id, user.email, 0),
       user: { id: user.id, email: user.email, displayName: user.display_name },
-      household,
+      household: null,
     });
   } catch (e) {
     console.error('[auth/register]', e);

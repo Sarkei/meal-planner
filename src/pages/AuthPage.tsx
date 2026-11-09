@@ -191,8 +191,8 @@ export function AuthPage() {
             )}
 
             <p className="mt-5 text-xs leading-relaxed text-ink/50">
-              Mit der Registrierung wird automatisch ein eigener Haushalt angelegt. Andere Personen lädst du später über
-              den Einladungscode im Tab „Haushalt" ein. Alle Rezepte sind für alle sichtbar.
+              Nach der Registrierung legst du im Tab „Haushalt" einen eigenen an oder trittst mit einem Einladungscode
+              bei. Alle Rezepte der Sammlung sind für alle sichtbar.
             </p>
           </div>
         </div>

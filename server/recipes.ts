@@ -17,6 +17,9 @@ type RecipeRow = {
   description: string;
   servings: number;
   prep_minutes: number | null;
+  total_minutes: number | null;
+  difficulty: string | null;
+  image_url: string | null;
   tags: string[];
   source: string;
   status: string;
@@ -45,6 +48,9 @@ function mapRecipe(row: RecipeRow) {
     description: row.description,
     servings: row.servings,
     prepMinutes: row.prep_minutes,
+    totalMinutes: row.total_minutes,
+    difficulty: row.difficulty,
+    imageUrl: row.image_url,
     tags: row.tags ?? [],
     source: row.source,
     status: row.status,
@@ -250,16 +256,13 @@ recipesRouter.post('/', async (req: AuthRequest, res) => {
     fail(res, 400, 'invalid-input', parsed.error.issues[0]?.message ?? 'Rezept prüfen.');
     return;
   }
+  // Ohne Haushalt landet das Rezept trotzdem in der Sammlung (household_id bleibt leer).
   const householdId = await resolveHousehold(String(body.householdId ?? ''), req.userId!);
-  if (!householdId) {
-    fail(res, 400, 'household-required', 'Kein Haushalt gefunden — bitte zuerst einen anlegen.');
-    return;
-  }
   const recipe = normalizeRecipe(parsed.data);
   const source = ['manual', 'ai', 'copied'].includes(String(body.source)) ? String(body.source) : 'manual';
   const created = await pool.query<{ id: string }>(
-    `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, tags, source, ingredients, steps, nutrition)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb)
+    `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, total_minutes, difficulty, image_url, tags, source, ingredients, steps, nutrition)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb)
      RETURNING id`,
     [
       householdId,
@@ -268,6 +271,9 @@ recipesRouter.post('/', async (req: AuthRequest, res) => {
       recipe.description,
       recipe.servings,
       recipe.prepMinutes,
+      recipe.totalMinutes,
+      recipe.difficulty,
+      recipe.imageUrl,
       recipe.tags,
       source,
       JSON.stringify(recipe.ingredients),
@@ -306,8 +312,9 @@ recipesRouter.patch('/:id', async (req: AuthRequest, res) => {
   const recipe = normalizeRecipe(parsed.data);
   await pool.query(
     `UPDATE recipes SET title=$1, description=$2, servings=$3, prep_minutes=$4, tags=$5,
-            ingredients=$6::jsonb, steps=$7::jsonb, nutrition=$8::jsonb, updated_at=now()
-      WHERE id=$9`,
+            ingredients=$6::jsonb, steps=$7::jsonb, nutrition=$8::jsonb,
+            total_minutes=$9, difficulty=$10, image_url=$11, updated_at=now()
+      WHERE id=$12`,
     [
       recipe.title,
       recipe.description,
@@ -317,6 +324,9 @@ recipesRouter.patch('/:id', async (req: AuthRequest, res) => {
       JSON.stringify(recipe.ingredients),
       JSON.stringify(recipe.steps),
       JSON.stringify(recipe.nutrition),
+      recipe.totalMinutes,
+      recipe.difficulty,
+      recipe.imageUrl,
       req.params.id,
     ],
   );
@@ -363,14 +373,10 @@ recipesRouter.post('/:id/copy', async (req: AuthRequest, res) => {
     String((req.body as { householdId?: string }).householdId ?? ''),
     req.userId!,
   );
-  if (!householdId) {
-    fail(res, 400, 'household-required', 'Kein Haushalt gefunden.');
-    return;
-  }
   const row = source.rows[0];
   const created = await pool.query<{ id: string }>(
-    `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, tags, source, ingredients, steps, nutrition)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'copied',$8::jsonb,$9::jsonb,$10::jsonb)
+    `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, total_minutes, difficulty, image_url, tags, source, ingredients, steps, nutrition)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'copied',$11::jsonb,$12::jsonb,$13::jsonb)
      RETURNING id`,
     [
       householdId,
@@ -379,6 +385,9 @@ recipesRouter.post('/:id/copy', async (req: AuthRequest, res) => {
       row.description,
       row.servings,
       row.prep_minutes,
+      row.total_minutes,
+      row.difficulty,
+      row.image_url,
       row.tags,
       JSON.stringify(row.ingredients),
       JSON.stringify(row.steps),

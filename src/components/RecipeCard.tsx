@@ -1,4 +1,4 @@
-import { Clock, Heart, Sparkles, Star, Users } from 'lucide-react';
+import { ChefHat, Clock, Heart, Sparkles, Star, Users } from 'lucide-react';
 import type { Recipe } from '../lib/types';
 
 export function RecipeCard({
@@ -11,7 +11,15 @@ export function RecipeCard({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="card group flex flex-col gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-lg">
+    <div className="card group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg">
+      {recipe.imageUrl ? (
+        <img src={recipe.imageUrl} alt={recipe.title} className="h-36 w-full object-cover" loading="lazy" />
+      ) : (
+        <div className="flex h-24 w-full items-center justify-center bg-gradient-to-br from-leaf-soft via-cream to-amber-100">
+          <ChefHat className="h-7 w-7 text-leaf/35" />
+        </div>
+      )}
+      <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <button className="text-left" onClick={onOpen}>
           <h3 className="font-display text-base leading-snug font-bold group-hover:text-leaf">{recipe.title}</h3>
@@ -34,11 +42,12 @@ export function RecipeCard({
             <span className="font-normal text-ink/40">({recipe.ratingCount})</span>
           </span>
         )}
-        {recipe.prepMinutes != null && (
+        {(recipe.totalMinutes ?? recipe.prepMinutes) != null && (
           <span className="inline-flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" /> {recipe.prepMinutes} min
+            <Clock className="h-3.5 w-3.5" /> {recipe.totalMinutes ?? recipe.prepMinutes} min
           </span>
         )}
+        {recipe.difficulty && <span className="capitalize">{recipe.difficulty}</span>}
         <span className="inline-flex items-center gap-1">
           <Users className="h-3.5 w-3.5" /> {recipe.servings} Port.
         </span>
@@ -60,6 +69,7 @@ export function RecipeCard({
           ))}
         </div>
         {recipe.authorName && <span className="shrink-0 text-[10px] text-ink/40">von {recipe.authorName.split(' ')[0]}</span>}
+      </div>
       </div>
     </div>
   );
