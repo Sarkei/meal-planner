@@ -14,49 +14,18 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api, setToken } from '../lib/api';
+import {
+  ALLERGY_OPTIONS as ALLERGY_OPTIONS_BASE,
+  CUISINE_OPTIONS as CUISINE_OPTIONS_BASE,
+  DIET_OPTIONS as DIET_OPTIONS_BASE,
+} from '../lib/preferences';
 import { SLOTS, type Slot, type UserSettings } from '../lib/types';
 
 type Option = { value: string; label: string };
 
-const DIET_OPTIONS = [
-  'vegetarisch',
-  'vegan',
-  'pescetarisch',
-  'low carb',
-  'high protein',
-  'glutenfrei',
-  'laktosefrei',
-  'kalorienbewusst',
-];
-
-const CUISINE_OPTIONS = [
-  'Deutsch',
-  'Italienisch',
-  'Spanisch',
-  'Französisch',
-  'Griechisch',
-  'Türkisch',
-  'Asiatisch',
-  'Indisch',
-  'Mexikanisch',
-  'Amerikanisch',
-  'Orientalisch',
-];
-
-const ALLERGY_OPTIONS = [
-  'Nüsse',
-  'Erdnüsse',
-  'Gluten',
-  'Laktose',
-  'Ei',
-  'Soja',
-  'Fisch',
-  'Meeresfrüchte',
-  'Schweinefleisch',
-  'Pilze',
-  'Sellerie',
-  'Sesam',
-];
+const DIET_OPTIONS = [...DIET_OPTIONS_BASE];
+const CUISINE_OPTIONS = [...CUISINE_OPTIONS_BASE];
+const ALLERGY_OPTIONS = [...ALLERGY_OPTIONS_BASE];
 
 const TIME_OPTIONS: Option[] = [
   { value: '', label: 'Egal' },

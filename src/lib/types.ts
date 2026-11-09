@@ -34,6 +34,9 @@ export type Recipe = {
   difficulty: 'leicht' | 'mittel' | 'schwer' | null;
   imageUrl: string | null;
   tags: string[];
+  diets: string[];
+  cuisines: string[];
+  allergens: string[];
   source: 'manual' | 'ai' | 'copied' | string;
   status: 'active' | 'archived' | string;
   ingredients: Ingredient[];
@@ -102,15 +105,23 @@ export type WeekPlan = { weekStart: string; planId: string | null; entries: Plan
 
 export type ShoppingItem = { name: string; unit: string; amount: number; approximated: boolean; usedIn: string[] };
 
+export type FacetValue = { value: string; count: number };
+
 export type Facets = {
   tags: { tag: string; count: number }[];
   authors: { id: number; name: string; count: number }[];
   totals: { recipes: number; favorites: number; ratings: number };
+  diets?: FacetValue[];
+  cuisines?: FacetValue[];
+  allergens?: FacetValue[];
 };
 
 export type RecipeQuery = {
   q?: string;
   tags?: string[];
+  diets?: string[];
+  cuisines?: string[];
+  excludeAllergens?: string[];
   source?: 'ai' | 'manual' | 'copied' | '';
   maxMinutes?: number | null;
   maxKcal?: number | null;
@@ -154,6 +165,9 @@ export function buildRecipeQuery(base: RecipeQuery): string {
   const params = new URLSearchParams();
   if (base.q) params.set('q', base.q);
   if (base.tags?.length) params.set('tags', base.tags.join(','));
+  if (base.diets?.length) params.set('diets', base.diets.join(','));
+  if (base.cuisines?.length) params.set('cuisines', base.cuisines.join(','));
+  if (base.excludeAllergens?.length) params.set('excludeAllergens', base.excludeAllergens.join(','));
   if (base.source) params.set('source', base.source);
   if (base.maxMinutes) params.set('maxMinutes', String(base.maxMinutes));
   if (base.maxKcal) params.set('maxKcal', String(base.maxKcal));

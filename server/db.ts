@@ -60,6 +60,13 @@ export async function initDb(): Promise<void> {
       updated_at   timestamptz NOT NULL DEFAULT now()
     );
 
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS diets text[] NOT NULL DEFAULT '{}';
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS cuisines text[] NOT NULL DEFAULT '{}';
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS allergens text[] NOT NULL DEFAULT '{}';
+    CREATE INDEX IF NOT EXISTS recipes_diets_idx ON recipes USING gin (diets);
+    CREATE INDEX IF NOT EXISTS recipes_cuisines_idx ON recipes USING gin (cuisines);
+    CREATE INDEX IF NOT EXISTS recipes_allergens_idx ON recipes USING gin (allergens);
+
     CREATE TABLE IF NOT EXISTS favorites (
       user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       recipe_id  uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,

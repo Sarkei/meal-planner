@@ -12,6 +12,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import { ALLERGY_OPTIONS, CUISINE_OPTIONS, DIET_OPTIONS, KCAL_OPTIONS, TIME_OPTIONS } from '../lib/preferences';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import { navigate } from '../App';
@@ -42,6 +43,9 @@ export function RecipesPage() {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<NonNullable<RecipeQuery['sort']>>('newest');
   const [tags, setTags] = useState<string[]>([]);
+  const [diets, setDiets] = useState<string[]>([]);
+  const [cuisines, setCuisines] = useState<string[]>([]);
+  const [excludedAllergens, setExcludedAllergens] = useState<string[]>([]);
   const [maxMinutes, setMaxMinutes] = useState<number | ''>('');
   const [maxKcal, setMaxKcal] = useState<number | ''>('');
   const [minProtein, setMinProtein] = useState<number | ''>('');
@@ -58,10 +62,18 @@ export function RecipesPage() {
 
   const activeFilters = useMemo(
     () =>
-      [tags.length > 0, maxMinutes !== '', maxKcal !== '', minProtein !== '', source !== '', authorId != null].filter(
-        Boolean,
-      ).length,
-    [tags, maxMinutes, maxKcal, minProtein, source, authorId],
+      [
+        tags.length > 0,
+        diets.length > 0,
+        cuisines.length > 0,
+        excludedAllergens.length > 0,
+        maxMinutes !== '',
+        maxKcal !== '',
+        minProtein !== '',
+        source !== '',
+        authorId != null,
+      ].filter(Boolean).length,
+    [tags, diets, cuisines, excludedAllergens, maxMinutes, maxKcal, minProtein, source, authorId],
   );
 
   const load = useCallback(
@@ -73,6 +85,9 @@ export function RecipesPage() {
         const base: RecipeQuery = {
           q: query.trim() || undefined,
           tags,
+          diets,
+          cuisines,
+          excludeAllergens: excludedAllergens,
           sort,
           maxMinutes: maxMinutes === '' ? null : Number(maxMinutes),
           maxKcal: maxKcal === '' ? null : Number(maxKcal),
@@ -94,7 +109,7 @@ export function RecipesPage() {
         setLoadingMore(false);
       }
     },
-    [query, tags, sort, maxMinutes, maxKcal, minProtein, source, authorId, tab],
+    [query, tags, diets, cuisines, excludedAllergens, sort, maxMinutes, maxKcal, minProtein, source, authorId, tab],
   );
 
   useEffect(() => {
@@ -127,12 +142,18 @@ export function RecipesPage() {
     }
   };
 
+  const toggleIn = (list: string[], value: string, max = 12) =>
+    list.includes(value) ? list.filter((v) => v !== value) : [...list, value].slice(0, max);
+
   const toggleTag = (tag: string) => {
     setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag].slice(0, 8)));
   };
 
   const resetFilters = () => {
     setTags([]);
+    setDiets([]);
+    setCuisines([]);
+    setExcludedAllergens([]);
     setMaxMinutes('');
     setMaxKcal('');
     setMinProtein('');
@@ -207,28 +228,125 @@ export function RecipesPage() {
 
       {showFilters && (
         <div className="card space-y-4 p-4">
+          <div>
+            <label className="label">Ernährungsform</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setDiets([])}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  diets.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                }`}
+              >
+                Egal
+              </button>
+              {DIET_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setDiets((prev) => toggleIn(prev, option))}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    diets.includes(option)
+                      ? 'border-leaf bg-leaf text-white'
+                      : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Präferierte Küche</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setCuisines([])}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  cuisines.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                }`}
+              >
+                Egal
+              </button>
+              {CUISINE_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setCuisines((prev) => toggleIn(prev, option))}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    cuisines.includes(option)
+                      ? 'border-leaf bg-leaf text-white'
+                      : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Allergien ausschließen</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setExcludedAllergens([])}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  excludedAllergens.length === 0
+                    ? 'border-leaf bg-leaf text-white'
+                    : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                }`}
+              >
+                Keine Allergien
+              </button>
+              {ALLERGY_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setExcludedAllergens((prev) => toggleIn(prev, option, 14))}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    excludedAllergens.includes(option)
+                      ? 'border-red-500 bg-red-500 text-white'
+                      : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                  }`}
+                >
+                  ohne {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <label className="label">Max. Zeit (Minuten)</label>
-              <input
-                type="number"
-                min={0}
-                className="input"
-                value={maxMinutes}
-                onChange={(e) => setMaxMinutes(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="z. B. 30"
-              />
+              <label className="label">Max. Zeit</label>
+              <div className="flex flex-wrap gap-2">
+                {TIME_OPTIONS.map((option) => (
+                  <button
+                    key={option.value || 'any'}
+                    onClick={() => setMaxMinutes(option.value === '' ? '' : Number(option.value))}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      String(maxMinutes) === option.value
+                        ? 'border-leaf bg-leaf text-white'
+                        : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
-              <label className="label">Max. Kalorien / Portion</label>
-              <input
-                type="number"
-                min={0}
-                className="input"
-                value={maxKcal}
-                onChange={(e) => setMaxKcal(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="z. B. 600"
-              />
+              <label className="label">Kalorien</label>
+              <div className="flex flex-wrap gap-2">
+                {KCAL_OPTIONS.map((option) => (
+                  <button
+                    key={option.value || 'any'}
+                    onClick={() => setMaxKcal(option.value === '' ? '' : Number(option.value))}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      String(maxKcal) === option.value
+                        ? 'border-leaf bg-leaf text-white'
+                        : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="label">Min. Protein (g)</label>

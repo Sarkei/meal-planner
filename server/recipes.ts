@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pool } from './db';
 import { fail, type AuthRequest } from './guards';
 import { normalizeRecipe, recipeInputSchema } from './recipeSchema';
+import { deriveMeta } from './recipeMeta';
 
 export const recipesRouter = Router();
 
@@ -21,6 +22,9 @@ type RecipeRow = {
   difficulty: string | null;
   image_url: string | null;
   tags: string[];
+  diets: string[] | null;
+  cuisines: string[] | null;
+  allergens: string[] | null;
   source: string;
   status: string;
   ingredients: unknown;
@@ -38,6 +42,32 @@ type RecipeRow = {
   full_count?: number;
 };
 
+/** Diät/Küche/Allergene aus Titel, Tags und Zutaten ableiten und mitschreiben. */
+async function applyMeta(
+  recipeId: string,
+  recipe: {
+    title: string;
+    description?: string;
+    tags?: string[];
+    ingredients?: Array<{ name?: string }>;
+    nutrition?: { kcal?: number | null; protein?: number | null; carbs?: number | null } | null;
+  },
+) {
+  const meta = deriveMeta({
+    title: recipe.title,
+    description: recipe.description ?? '',
+    tags: recipe.tags ?? [],
+    ingredients: recipe.ingredients ?? [],
+    nutrition: recipe.nutrition ?? null,
+  });
+  await pool.query('UPDATE recipes SET diets = $2, cuisines = $3, allergens = $4 WHERE id = $1', [
+    recipeId,
+    meta.diets,
+    meta.cuisines,
+    meta.allergens,
+  ]);
+}
+
 function mapRecipe(row: RecipeRow) {
   return {
     id: row.id,
@@ -52,6 +82,9 @@ function mapRecipe(row: RecipeRow) {
     difficulty: row.difficulty,
     imageUrl: row.image_url,
     tags: row.tags ?? [],
+    diets: row.diets ?? [],
+    cuisines: row.cuisines ?? [],
+    allergens: row.allergens ?? [],
     source: row.source,
     status: row.status,
     ingredients: row.ingredients ?? [],
@@ -84,6 +117,9 @@ const SELECT_BASE = `
 type Filters = {
   q: string;
   tags: string[];
+  diets: string[];
+  cuisines: string[];
+  excludeAllergens: string[];
   source: string;
   maxMinutes: number | null;
   maxKcal: number | null;
@@ -107,6 +143,21 @@ function parseFilters(query: Record<string, unknown>): Filters {
       .map((t) => t.trim())
       .filter(Boolean)
       .slice(0, 8),
+    diets: String(query.diets ?? '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 10),
+    cuisines: String(query.cuisines ?? '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 10),
+    excludeAllergens: String(query.excludeAllergens ?? '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 14),
     source: ['ai', 'manual', 'copied'].includes(String(query.source)) ? String(query.source) : '',
     maxMinutes: num(query.maxMinutes),
     maxKcal: num(query.maxKcal),
@@ -144,6 +195,17 @@ function buildWhere(filters: Filters, userId: number, params: unknown[]): string
   }
   if (filters.tags.length) {
     clauses.push(`r.tags && $${params.push(filters.tags)}::text[]`);
+  }
+  // Mehrfachauswahl: mindestens ein Merkmal muss passen (wie in den Einstellungen)
+  if (filters.diets.length) {
+    clauses.push(`r.diets && $${params.push(filters.diets)}::text[]`);
+  }
+  if (filters.cuisines.length) {
+    clauses.push(`r.cuisines && $${params.push(filters.cuisines)}::text[]`);
+  }
+  // Allergien schließen aus: kein einziges gewähltes Allergen darf enthalten sein
+  if (filters.excludeAllergens.length) {
+    clauses.push(`NOT (r.allergens && $${params.push(filters.excludeAllergens)}::text[])`);
   }
   if (filters.maxMinutes != null) {
     clauses.push(`r.prep_minutes IS NOT NULL AND r.prep_minutes <= $${params.push(filters.maxMinutes)}`);
@@ -226,7 +288,19 @@ recipesRouter.get('/facets', async (_req: AuthRequest, res) => {
             (SELECT count(*) FROM favorites f JOIN recipes rf ON rf.id = f.recipe_id WHERE rf.status = 'active')::int AS favorites,
             (SELECT count(*) FROM recipe_ratings rt JOIN recipes rr ON rr.id = rt.recipe_id WHERE rr.status = 'active')::int AS ratings`,
   );
-  res.json({ tags: tags.rows, authors: authors.rows, totals: totals.rows[0] });
+  const valueFacet = async (column: 'diets' | 'cuisines' | 'allergens') => {
+    const { rows } = await pool.query<{ value: string; count: number }>(
+      `SELECT value, count(*)::int AS count FROM recipes r, unnest(r.${column}) AS value
+        WHERE r.status = 'active' GROUP BY value ORDER BY count DESC, value ASC`,
+    );
+    return rows;
+  };
+  const [diets, cuisines, allergens] = await Promise.all([
+    valueFacet('diets'),
+    valueFacet('cuisines'),
+    valueFacet('allergens'),
+  ]);
+  res.json({ tags: tags.rows, authors: authors.rows, totals: totals.rows[0], diets, cuisines, allergens });
 });
 
 recipesRouter.get('/favorites', async (req: AuthRequest, res) => {
@@ -288,6 +362,7 @@ recipesRouter.post('/', async (req: AuthRequest, res) => {
       recipeId,
     ]);
   }
+  await applyMeta(recipeId, recipe);
   const fresh = await pool.query<RecipeRow>(`${SELECT_BASE} WHERE r.id = $2`, [req.userId, recipeId]);
   res.status(201).json({ recipe: mapRecipe(fresh.rows[0]) });
 });
@@ -330,6 +405,7 @@ recipesRouter.patch('/:id', async (req: AuthRequest, res) => {
       req.params.id,
     ],
   );
+  await applyMeta(req.params.id, recipe);
   const fresh = await pool.query<RecipeRow>(`${SELECT_BASE} WHERE r.id = $2`, [req.userId, req.params.id]);
   res.json({ recipe: mapRecipe(fresh.rows[0]) });
 });
@@ -398,6 +474,13 @@ recipesRouter.post('/:id/copy', async (req: AuthRequest, res) => {
     req.userId,
     created.rows[0].id,
   ]);
+  await applyMeta(created.rows[0].id, {
+    title: row.title,
+    description: row.description,
+    tags: row.tags,
+    ingredients: row.ingredients as Array<{ name?: string }>,
+    nutrition: row.nutrition as { kcal?: number; protein?: number; carbs?: number } | null,
+  });
   const fresh = await pool.query<RecipeRow>(`${SELECT_BASE} WHERE r.id = $2`, [req.userId, created.rows[0].id]);
   res.status(201).json({ recipe: mapRecipe(fresh.rows[0]) });
 });
