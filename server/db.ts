@@ -67,6 +67,16 @@ export async function initDb(): Promise<void> {
     CREATE INDEX IF NOT EXISTS recipes_cuisines_idx ON recipes USING gin (cuisines);
     CREATE INDEX IF NOT EXISTS recipes_allergens_idx ON recipes USING gin (allergens);
 
+    CREATE TABLE IF NOT EXISTS image_jobs (
+      id           serial PRIMARY KEY,
+      recipe_id    uuid NOT NULL UNIQUE REFERENCES recipes(id) ON DELETE CASCADE,
+      status       text NOT NULL DEFAULT 'pending',
+      attempts     integer NOT NULL DEFAULT 0,
+      error        text,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      updated_at   timestamptz NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS favorites (
       user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       recipe_id  uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,

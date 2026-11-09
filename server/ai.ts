@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from './db';
+import { enqueueImageJob } from './images';
 import { fail, requireHousehold, type AuthRequest } from './guards';
 import {
   aiRecipeSchema,
@@ -297,6 +298,7 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
       ],
     );
     const recipeId = created.rows[0].id;
+    void enqueueImageJob(recipeId).catch(() => undefined);
     const makeFavorite = body.favorite === true || mode === 'favorite' || settings.aiAutoFavorite;
     if (makeFavorite) {
       await pool.query('INSERT INTO favorites (user_id, recipe_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [

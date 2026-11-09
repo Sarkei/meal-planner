@@ -3,6 +3,7 @@ import { pool } from './db';
 import { fail, type AuthRequest } from './guards';
 import { normalizeRecipe, recipeInputSchema } from './recipeSchema';
 import { deriveMeta } from './recipeMeta';
+import { enqueueImageJob } from './images';
 
 export const recipesRouter = Router();
 
@@ -363,6 +364,8 @@ recipesRouter.post('/', async (req: AuthRequest, res) => {
     ]);
   }
   await applyMeta(recipeId, recipe);
+  // Ohne eigenes Bild übernimmt die KI: Illustration im Hintergrund erzeugen
+  if (!recipe.imageUrl) void enqueueImageJob(recipeId).catch(() => undefined);
   const fresh = await pool.query<RecipeRow>(`${SELECT_BASE} WHERE r.id = $2`, [req.userId, recipeId]);
   res.status(201).json({ recipe: mapRecipe(fresh.rows[0]) });
 });
@@ -474,6 +477,7 @@ recipesRouter.post('/:id/copy', async (req: AuthRequest, res) => {
     req.userId,
     created.rows[0].id,
   ]);
+  if (!row.image_url) void enqueueImageJob(created.rows[0].id).catch(() => undefined);
   await applyMeta(created.rows[0].id, {
     title: row.title,
     description: row.description,
@@ -483,6 +487,32 @@ recipesRouter.post('/:id/copy', async (req: AuthRequest, res) => {
   });
   const fresh = await pool.query<RecipeRow>(`${SELECT_BASE} WHERE r.id = $2`, [req.userId, created.rows[0].id]);
   res.status(201).json({ recipe: mapRecipe(fresh.rows[0]) });
+});
+
+/**
+ * Bild (neu) erzeugen lassen. Ohne Bild dauert es ein paar Sekunden, bis der Hintergrund-Arbeiter
+ * fertig ist — die Antwort sagt nur, dass der Auftrag liegt.
+ */
+recipesRouter.post('/:id/image', async (req: AuthRequest, res) => {
+  const found = await pool.query('SELECT owner_id, status FROM recipes WHERE id = $1', [req.params.id]);
+  if (!found.rowCount) {
+    fail(res, 404, 'not-found', 'Rezept nicht gefunden.');
+    return;
+  }
+  if (found.rows[0].status === 'archived') {
+    fail(res, 409, 'archived', 'Archivierte Rezepte bekommen kein neues Bild.');
+    return;
+  }
+  await enqueueImageJob(req.params.id, true);
+  res.status(202).json({ queued: true });
+});
+
+recipesRouter.get('/:id/image-status', async (req: AuthRequest, res) => {
+  const job = await pool.query<{ status: string; error: string | null }>(
+    'SELECT status, error FROM image_jobs WHERE recipe_id = $1',
+    [req.params.id],
+  );
+  res.json({ status: job.rows[0]?.status ?? 'none', error: job.rows[0]?.error ?? null });
 });
 
 recipesRouter.post('/:id/favorite', async (req: AuthRequest, res) => {

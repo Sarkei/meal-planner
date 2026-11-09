@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { initDb, pool } from './db';
 import { backfillRecipeMeta } from './recipeMeta';
+import { startImageWorker } from './images';
 import { attachUserFromToken, authRouter } from './auth';
 import { requireAuth } from './guards';
 import { householdsRouter } from './households';
@@ -69,6 +70,7 @@ async function start(): Promise<void> {
   await initDb();
   const filled = await backfillRecipeMeta();
   if (filled) console.log(`📋 ${filled} Rezepte mit Diät/Küche/Allergenen nachgerüstet`);
+  startImageWorker();
   const ai = resolveProvider();
   app.listen(PORT, () => {
     console.log(`🍲 Meal Planner läuft auf http://localhost:${PORT}`);
