@@ -18,8 +18,11 @@ Zwei Grundsätze: **jede Person sieht jedes Rezept**, und **Rezepte werden nie g
 **Haushalte / Gruppen**
 - Nach der Registrierung gibt es **keinen automatischen Haushalt**: Der Tab „Haushalt" zeigt
   „Haushalt erstellen" (eigener Name) und „Haushalt beitreten" (Einladungscode).
-- Beliebig viele Haushalte pro Konto; aktiver Haushalt wird oben umgeschaltet. Rezepte lassen sich
-  auch ohne Haushalt anlegen — nur Wochenpläne hängen daran.
+- **Genau ein Haushalt pro Person** — ein zweiter Beitritt oder eine zweite Gründung wird mit
+  409 abgelehnt. Rezepte lassen sich auch ohne Haushalt anlegen, nur Wochenpläne hängen daran.
+- Im Haushalt: Mitglieder, Einladungscode (rotierbar) und **Wochenplan für den ganzen Haushalt
+  erstellen** — Tage und Mahlzeiten auswählen, die KI plant nach den Vorgaben *aller* Mitglieder
+  (Ernährungsformen, Allergien, Küchen, Zeit, Kalorien, Sonderwünsche).
 - Beitritt über 6-stelligen Einladungscode (ohne 0/O/1/I, damit man ihn vorlesen kann).
 - Besitzer kann Code neu erzeugen, Mitglieder entfernen, Haushalt umbenennen oder löschen.
 - Mitglieder sehen alle Rezepte und Wochenpläne des Haushalts.
@@ -51,6 +54,10 @@ Zwei Grundsätze: **jede Person sieht jedes Rezept**, und **Rezepte werden nie g
 - Die Rezepte eines Tages stehen als Karten untereinander und lassen sich **per Drag & Drop**
   sortieren — auch in einen anderen Tag hinein. Auf dem Handy übernehmen Pfeile das Verschieben.
 - Reihenfolge liegt als `position` in der Datenbank (`PUT …/reorder` schreibt sie in einer Transaktion).
+- **Echtzeit:** Der Plan ist für alle Haushaltsmitglieder derselbe Datensatz. Änderungen werden per
+  Server-Sent-Events (`GET /api/events?householdId=…&token=…`) an alle offenen Clients gemeldet,
+  die Ansicht lädt daraufhin nach. Kein lokaler Plan, kein Abgleich nötig — wer beitritt, sieht sofort
+  den Plan des Haushalts.
 - Tageskalorien werden aus den Nährwerten der geplanten Rezepte summiert.
 - Einkaufsliste aus der Woche: Zutaten werden über alle Rezepte aggregiert, auf die im Slot
   geplante Portionszahl umgerechnet und abhakbar dargestellt; Kopieren als Text.
@@ -70,9 +77,18 @@ Zwei Grundsätze: **jede Person sieht jedes Rezept**, und **Rezepte werden nie g
   in der App (`ALLOW_DEV_RESET_LINK=1`). Link gilt 60 Minuten, ist einmalig.
 - Passwort ändern im Profil; dabei werden alle anderen Sitzungen ungültig (`token_version` im JWT).
 - „Auf allen Geräten abmelden", Datenexport als JSON, Konto löschen (Rezepte bleiben anonymisiert).
-- Einstellungen: Anzeigename; KI-Vorgaben als **feste Klick-Optionen** (Portionen, Ernährungsform,
-  Allergien als Mehrfachauswahl, max. Zeit, Kalorienziel, Auto-Favorit) plus **ein** Freitextfeld
+- Einstellungen: Anzeigename; KI-Vorgaben als **feste Klick-Optionen** — Portionen, **Ernährungsform
+  (Mehrfachauswahl)**, **präferierte Küche (Mehrfachauswahl, „Egal")**, **Allergien (Mehrfachauswahl
+  mit „Keine Allergien")**, max. Zeit, Kalorienziel, Auto-Favorit — plus **ein** Freitextfeld
   „Sonderwünsche"; Design (System/Hell/Dunkel); Passwort, Datenexport, Konto löschen.
+
+**Einkaufsliste (eigener Tab)**
+- Zutaten der Woche werden automatisch aus dem Plan berechnet und nach Supermarkt-Logik gruppiert:
+  Obst & Gemüse · Milchprodukte & Eier · Fleisch & Fisch · Brot & Backwaren · Nudeln, Reis & Vorrat ·
+  Tiefkühl · Getränke · Gewürze & Saucen · Haushalt & Drogerie · Sonstiges.
+- Manuelle Artikel über **einen** Button/Feld; die Kategorie bestimmt die KI (mit Stichwort-Fallback).
+- Abhaken, „Erledigte zurücksetzen", manuelle Artikel löschen; alles wird im Haushalt synchronisiert
+  und per SSE in Echtzeit verteilt.
 
 **Betrieb**
 - `/api/health` liefert DB-Status, KI-Provider und Uptime; Docker-Healthcheck nutzt diesen Endpunkt.

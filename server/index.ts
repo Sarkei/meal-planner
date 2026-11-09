@@ -9,6 +9,8 @@ import { householdsRouter } from './households';
 import { recipesRouter } from './recipes';
 import { plansRouter } from './plans';
 import { aiRouter, resolveProvider } from './ai';
+import { shoppingRouter } from './shopping';
+import { eventsRouter } from './events';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -36,11 +38,14 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+// SSE: Token kommt als Query-Parameter, weil EventSource keine Header setzen kann.
+app.use('/api/events', eventsRouter);
 // Alles ab hier nur mit gültigem Token — die Routen selbst prüfen zusätzlich Haushaltsrechte.
 app.use('/api/households', requireAuth, householdsRouter);
 app.use('/api/recipes', requireAuth, recipesRouter);
 app.use('/api/plans', requireAuth, plansRouter);
 app.use('/api/ai', requireAuth, aiRouter);
+app.use('/api/shopping', requireAuth, shoppingRouter);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not-found', message: 'Unbekannter Endpunkt.' });

@@ -481,8 +481,9 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
 function AiDefaultsHint({ settings }: { settings: UserSettings }) {
   const parts = [
-    settings.diet && `Ernährungsform: ${settings.diet}`,
-    settings.allergies && `Allergien: ${settings.allergies}`,
+    settings.diets.length > 0 && `Ernährungsform: ${settings.diets.join(', ')}`,
+    settings.allergies.length > 0 && `Allergien: ${settings.allergies.join(', ')}`,
+    settings.cuisines.length > 0 && `Küche: ${settings.cuisines.join(', ')}`,
     settings.maxMinutes && `max. ${settings.maxMinutes} min`,
     settings.kcalTarget && `${settings.kcalTarget} kcal`,
   ].filter(Boolean) as string[];

@@ -167,6 +167,25 @@ export async function initDb(): Promise<void> {
     CREATE INDEX IF NOT EXISTS plan_entries_order_idx ON plan_entries (plan_id, day_index, position);
     ALTER TABLE plan_entries ALTER COLUMN slot SET DEFAULT 'mahlzeit';
 
+    -- Einkaufsliste pro Haushalt und Woche (automatisch aus dem Plan + manuelle Artikel)
+    CREATE TABLE IF NOT EXISTS shopping_items (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+      week_start   date NOT NULL,
+      key          text NOT NULL,
+      name         text NOT NULL,
+      amount       numeric(10,2),
+      unit         text NOT NULL DEFAULT '',
+      category     text NOT NULL DEFAULT 'sonstiges',
+      checked      boolean NOT NULL DEFAULT false,
+      source       text NOT NULL DEFAULT 'manual',
+      created_by   integer REFERENCES users(id) ON DELETE SET NULL,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      updated_at   timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (household_id, week_start, key)
+    );
+    CREATE INDEX IF NOT EXISTS shopping_items_lookup_idx ON shopping_items (household_id, week_start);
+
     CREATE INDEX IF NOT EXISTS recipes_status_idx ON recipes (status, updated_at DESC);
     CREATE INDEX IF NOT EXISTS recipe_ratings_recipe_idx ON recipe_ratings (recipe_id);
     CREATE INDEX IF NOT EXISTS recipe_comments_recipe_idx ON recipe_comments (recipe_id, created_at DESC);

@@ -6,8 +6,9 @@ import { RecipesPage } from './pages/RecipesPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { HouseholdPage } from './pages/HouseholdPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ShoppingPage } from './pages/ShoppingPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { CalendarDays, BookOpen, Users, Settings, CookingPot } from 'lucide-react';
+import { CalendarDays, BookOpen, Users, Settings, CookingPot, ShoppingBasket } from 'lucide-react';
 
 export type Route = { name: string; id?: string; params: URLSearchParams };
 
@@ -35,6 +36,7 @@ function useRoute(): Route {
 const NAV = [
   { id: 'week', label: 'Woche', icon: CalendarDays },
   { id: 'recipes', label: 'Rezepte', icon: BookOpen },
+  { id: 'shopping', label: 'Einkauf', icon: ShoppingBasket },
   { id: 'household', label: 'Haushalt', icon: Users },
   { id: 'settings', label: 'Profil', icon: Settings },
 ];
@@ -64,6 +66,8 @@ export function App() {
     switch (route.name) {
       case 'recipes':
         return <RecipesPage />;
+      case 'shopping':
+        return <ShoppingPage />;
       case 'recipe':
         return <RecipeDetailPage recipeId={route.id} />;
       case 'household':

@@ -20,6 +20,18 @@ export function signToken(userId: number, email: string, tokenVersion: number): 
   } as jwt.SignOptions);
 }
 
+/** Nur Signatur prüfen (für SSE, wo kein Authorization-Header gesetzt werden kann). */
+export function verifyToken(token: string): { userId: number; tokenVersion: number } | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const id = Number(payload.sub);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return { userId: id, tokenVersion: Number(payload.tv ?? 0) };
+  } catch {
+    return null;
+  }
+}
+
 type TokenCache = { version: number; checkedAt: number };
 const tokenVersionCache = new Map<number, TokenCache>();
 
@@ -95,8 +107,12 @@ export async function createHouseholdWithOwner(
 export type UserSettings = {
   theme: 'system' | 'light' | 'dark';
   defaultServings: number;
-  diet: string;
+  /** Mehrfachauswahl, z. B. vegan + glutenfrei. Leer = keine Vorgabe. */
+  diets: string[];
+  /** Leer = keine Allergien/Abneigungen. */
   allergies: string[];
+  /** Präferierte Küchen, leer = egal. */
+  cuisines: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
@@ -107,14 +123,24 @@ export type UserSettings = {
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'system',
   defaultServings: 2,
-  diet: '',
+  diets: [],
   allergies: [],
+  cuisines: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,
   defaultSlots: ['abend'],
   specialWishes: '',
 };
+
+/** Akzeptiert Liste oder (Altbestand) Komma-Text und liefert eine saubere Liste. */
+function toStringList(value: unknown, max: number): string[] {
+  const raw = Array.isArray(value) ? value : String(value ?? '').split(',');
+  return raw
+    .map((v) => String(v).trim())
+    .filter((v) => v.length > 0 && v.toLowerCase() !== 'keine' && v.toLowerCase() !== 'keine vorgabe' && v.toLowerCase() !== 'egal')
+    .slice(0, max);
+}
 
 export function mergeSettings(raw: unknown): UserSettings {
   const value = (raw ?? {}) as Partial<UserSettings>;
@@ -124,15 +150,9 @@ export function mergeSettings(raw: unknown): UserSettings {
   return {
     theme: value.theme === 'light' || value.theme === 'dark' || value.theme === 'system' ? value.theme : DEFAULT_SETTINGS.theme,
     defaultServings: Math.min(12, Math.max(1, Number(value.defaultServings ?? DEFAULT_SETTINGS.defaultServings) || 2)),
-    diet: String(value.diet ?? '').slice(0, 120),
-    // Altbestand hatte hier einen Freitext — der wird in eine Liste zerlegt.
-    allergies: Array.isArray(value.allergies)
-      ? value.allergies.map((a) => String(a).slice(0, 40)).filter(Boolean).slice(0, 12)
-      : String(value.allergies ?? '')
-          .split(',')
-          .map((a) => a.trim())
-          .filter(Boolean)
-          .slice(0, 12),
+    diets: toStringList((value as { diets?: unknown }).diets ?? (value as { diet?: unknown }).diet, 8),
+    allergies: toStringList(value.allergies, 12),
+    cuisines: toStringList(value.cuisines, 10),
     maxMinutes: value.maxMinutes != null && Number.isFinite(Number(value.maxMinutes)) ? Number(value.maxMinutes) : null,
     kcalTarget: value.kcalTarget != null && Number.isFinite(Number(value.kcalTarget)) ? Number(value.kcalTarget) : null,
     aiAutoFavorite: value.aiAutoFavorite !== false,
@@ -144,6 +164,52 @@ export function mergeSettings(raw: unknown): UserSettings {
 export async function loadSettings(userId: number): Promise<UserSettings> {
   const row = await pool.query<{ data: unknown }>('SELECT data FROM user_settings WHERE user_id = $1', [userId]);
   return mergeSettings(row.rows[0]?.data);
+}
+
+/** Sammelt die Vorgaben aller Haushaltsmitglieder und fasst sie zusammen. */
+export async function loadHouseholdPreferences(householdId: string): Promise<{
+  diets: string[];
+  allergies: string[];
+  cuisines: string[];
+  maxMinutes: number | null;
+  kcalTarget: number | null;
+  specialWishes: string[];
+  members: number;
+}> {
+  const rows = await pool.query<{ data: unknown; display_name: string }>(
+    `SELECT coalesce(s.data, '{}'::jsonb) AS data, u.display_name
+       FROM household_members m
+       JOIN users u ON u.id = m.user_id
+       LEFT JOIN user_settings s ON s.user_id = m.user_id
+      WHERE m.household_id = $1
+      ORDER BY m.joined_at ASC`,
+    [householdId],
+  );
+  const merged = { diets: new Set<string>(), allergies: new Set<string>(), cuisines: new Set<string>(), wishes: [] as string[] };
+  let maxMinutes: number | null = null;
+  let kcalSum = 0;
+  let kcalCount = 0;
+  for (const row of rows.rows) {
+    const s = mergeSettings(row.data);
+    s.diets.forEach((d) => merged.diets.add(d));
+    s.allergies.forEach((a) => merged.allergies.add(a));
+    s.cuisines.forEach((c) => merged.cuisines.add(c));
+    if (s.specialWishes) merged.wishes.push(`${row.display_name}: ${s.specialWishes}`);
+    if (s.maxMinutes != null) maxMinutes = maxMinutes == null ? s.maxMinutes : Math.min(maxMinutes, s.maxMinutes);
+    if (s.kcalTarget != null) {
+      kcalSum += s.kcalTarget;
+      kcalCount += 1;
+    }
+  }
+  return {
+    diets: [...merged.diets],
+    allergies: [...merged.allergies],
+    cuisines: [...merged.cuisines],
+    maxMinutes,
+    kcalTarget: kcalCount ? Math.round(kcalSum / kcalCount) : null,
+    specialWishes: merged.wishes,
+    members: rows.rowCount ?? 0,
+  };
 }
 
 export async function saveSettings(userId: number, patch: unknown): Promise<UserSettings> {

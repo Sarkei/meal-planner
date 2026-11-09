@@ -15,7 +15,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { addDays, api, formatDayMonth, formatWeekLabel, mondayOf, toYmd } from '../lib/api';
-import { WEEKDAYS, type PlanEntry, type Recipe, type ShoppingItem, type WeekPlan } from '../lib/types';
+import { WEEKDAYS, type PlanEntry, type Recipe, type WeekPlan } from '../lib/types';
+import { useHouseholdEvents } from '../lib/useHouseholdEvents';
 import { Modal } from '../components/Modal';
 
 const EMPTY_DAYS: PlanEntry[][] = [[], [], [], [], [], [], []];
@@ -30,7 +31,6 @@ export function WeekPage() {
   const [error, setError] = useState<string | null>(null);
   const [pickerDay, setPickerDay] = useState<number | null>(null);
   const [showAi, setShowAi] = useState(false);
-  const [showShopping, setShowShopping] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget>(null);
   const [busy, setBusy] = useState(false);
@@ -52,6 +52,11 @@ export function WeekPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Echtzeit: Änderungen anderer Mitglieder sofort übernehmen
+  useHouseholdEvents(activeHousehold?.id, (type) => {
+    if (type === 'plan' || type === 'hello') void load();
+  });
 
   const byDay = useMemo(() => {
     const days: PlanEntry[][] = EMPTY_DAYS.map(() => []);
@@ -171,7 +176,7 @@ export function WeekPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn btn-ghost" onClick={() => setShowShopping(true)}>
+          <button className="btn btn-ghost" onClick={() => window.location.assign('#/shopping')}>
             <ClipboardList className="h-4 w-4" /> Einkaufsliste
           </button>
           <button className="btn btn-primary" onClick={() => setShowAi(true)}>
@@ -373,7 +378,7 @@ export function WeekPage() {
         />
       )}
 
-      {showShopping && <ShoppingModal householdId={activeHousehold.id} weekStart={weekStart} onClose={() => setShowShopping(false)} />}
+
     </div>
   );
 }
@@ -625,7 +630,7 @@ function AiWeekModal({
 
         <p className="text-[11px] text-ink/45">
           Aus deinem Profil:{' '}
-          {[settings.diet, settings.allergies?.join(', '), settings.maxMinutes ? `${settings.maxMinutes} min` : '', settings.kcalTarget ? `${settings.kcalTarget} kcal` : '', settings.specialWishes]
+          {[settings.diets.join(', '), settings.allergies.join(', '), settings.cuisines.join(', '), settings.maxMinutes ? `${settings.maxMinutes} min` : '', settings.kcalTarget ? `${settings.kcalTarget} kcal` : '', settings.specialWishes]
             .filter(Boolean)
             .join(' · ') || 'noch keine Vorgaben hinterlegt'}
         </p>
@@ -637,91 +642,6 @@ function AiWeekModal({
         {notes && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm text-leaf">{notes}</p>}
         {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       </div>
-    </Modal>
-  );
-}
-
-function ShoppingModal({ householdId, weekStart, onClose }: { householdId: string; weekStart: string; onClose: () => void }) {
-  const [items, setItems] = useState<ShoppingItem[] | null>(null);
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const data = await api<{ items: ShoppingItem[] }>(`/plans/${householdId}/${weekStart}/shopping-list`);
-        setItems(data.items);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Einkaufsliste konnte nicht geladen werden.');
-      }
-    })();
-  }, [householdId, weekStart]);
-
-  const toggle = (key: string) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-
-  const copy = async () => {
-    if (!items) return;
-    const text = items.map((i) => `${i.approximated ? '~' : ''}${i.amount ? `${i.amount} ${i.unit} ` : ''}${i.name}`.trim()).join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setError('Kopieren hat nicht geklappt.');
-    }
-  };
-
-  return (
-    <Modal
-      title="Einkaufsliste"
-      subtitle={formatWeekLabel(weekStart)}
-      onClose={onClose}
-      footer={
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-ink/50">{items ? `${items.length} Posten` : ''}</span>
-          <button className="btn btn-ghost text-xs" onClick={() => void copy()} disabled={!items?.length}>
-            {copied ? 'Kopiert ✓' : 'Als Text kopieren'}
-          </button>
-        </div>
-      }
-    >
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
-      {!items && !error && <p className="p-4 text-sm text-ink/50">Wird geladen …</p>}
-      {items && items.length === 0 && <p className="p-4 text-sm text-ink/50">Für diese Woche sind noch keine Rezepte eingeplant.</p>}
-      <ul className="divide-y divide-ink/5">
-        {items?.map((item) => {
-          const key = `${item.name}|${item.unit}`;
-          const isChecked = checked.has(key);
-          return (
-            <li key={key}>
-              <button className="flex w-full items-center gap-3 py-2 text-left" onClick={() => toggle(key)}>
-                <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                    isChecked ? 'border-leaf bg-leaf text-white' : 'border-ink/25'
-                  }`}
-                >
-                  {isChecked ? '✓' : ''}
-                </span>
-                <span className={`flex-1 text-sm ${isChecked ? 'text-ink/35 line-through' : ''}`}>
-                  {item.name}
-                  {item.unit ? <span className="text-ink/45"> · {item.unit}</span> : null}
-                </span>
-                <span className="text-sm font-semibold text-ink/70">
-                  {item.approximated ? '~' : ''}
-                  {item.amount || ''}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </Modal>
   );
 }

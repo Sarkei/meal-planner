@@ -1,33 +1,9 @@
 import { Router } from 'express';
 import { pool } from './db';
 import { fail, requireHousehold, type AuthRequest } from './guards';
-import type { Ingredient } from './recipeSchema';
+import { broadcast } from './events';
 
 export const plansRouter = Router();
-
-/** Einheiten einheitlich und lesbar ausgeben (Kleinschreibung kommt aus der KI). */
-const UNIT_LABELS: Record<string, string> = {
-  g: 'g',
-  kg: 'kg',
-  ml: 'ml',
-  l: 'l',
-  el: 'EL',
-  tl: 'TL',
-  stueck: 'Stück',
-  'stück': 'Stück',
-  prise: 'Prise',
-  bund: 'Bund',
-  zehe: 'Zehe',
-  zehen: 'Zehen',
-  scheibe: 'Scheibe',
-  scheiben: 'Scheiben',
-  dose: 'Dose',
-  dosen: 'Dosen',
-  becher: 'Becher',
-  packung: 'Packung',
-  stange: 'Stange',
-  handvoll: 'Handvoll',
-};
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -156,6 +132,7 @@ plansRouter.post('/:householdId/:weekStart/entries', async (req: AuthRequest, re
      VALUES ($1,$2,'mahlzeit',$3,$4,$5,$6)`,
     [planId, dayIndex, next.rows[0].pos, recipeId ?? null, customTitle?.trim() || null, servings ?? null],
   );
+  broadcast(req.params.householdId, 'plan');
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
@@ -177,6 +154,7 @@ plansRouter.patch('/:householdId/:weekStart/entries/:entryId', async (req: AuthR
       WHERE e.id = $2 AND e.plan_id = p.id AND p.household_id = $3 AND p.week_start = $4`,
     [servings ?? null, req.params.entryId, req.params.householdId, req.params.weekStart],
   );
+  broadcast(req.params.householdId, 'plan');
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
@@ -226,6 +204,7 @@ plansRouter.put('/:householdId/:weekStart/reorder', async (req: AuthRequest, res
   } finally {
     client.release();
   }
+  broadcast(req.params.householdId, 'plan');
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
@@ -240,55 +219,6 @@ plansRouter.delete('/:householdId/:weekStart/entry/:entryId', async (req: AuthRe
       WHERE e.id = $1 AND e.plan_id = p.id AND p.household_id = $2 AND p.week_start = $3`,
     [req.params.entryId, req.params.householdId, req.params.weekStart],
   );
+  broadcast(req.params.householdId, 'plan');
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
-});
-
-plansRouter.get('/:householdId/:weekStart/shopping-list', async (req: AuthRequest, res) => {
-  const access = await requireHousehold(req.params.householdId, req.userId!);
-  if (!access.ok) {
-    fail(res, access.status, access.error, access.message);
-    return;
-  }
-  const rows = await pool.query<{
-    title: string;
-    servings: number;
-    entry_servings: number | null;
-    ingredients: Ingredient[];
-  }>(
-    `SELECT r.title, r.servings, e.servings AS entry_servings, r.ingredients
-       FROM plan_entries e
-       JOIN meal_plans p ON p.id = e.plan_id
-       JOIN recipes r ON r.id = e.recipe_id
-      WHERE p.household_id = $1 AND p.week_start = $2`,
-    [req.params.householdId, req.params.weekStart],
-  );
-  const groups = new Map<string, { name: string; unit: string; amount: number; unknown: boolean; usedIn: Set<string> }>();
-  for (const row of rows.rows) {
-    const factor = row.entry_servings && row.servings ? row.entry_servings / row.servings : 1;
-    for (const ing of row.ingredients ?? []) {
-      const name = String(ing.name ?? '').trim();
-      if (!name) continue;
-      const unitKey = String(ing.unit ?? '').trim().toLowerCase();
-      const unit = UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim();
-      const key = `${name.toLowerCase()}|${unitKey}`;
-      const current = groups.get(key) ?? { name, unit, amount: 0, unknown: false, usedIn: new Set<string>() };
-      if (typeof ing.amount === 'number' && Number.isFinite(ing.amount)) {
-        current.amount += ing.amount * factor;
-      } else {
-        current.unknown = true;
-      }
-      current.usedIn.add(row.title);
-      groups.set(key, current);
-    }
-  }
-  const items = [...groups.values()]
-    .map((g) => ({
-      name: g.name,
-      unit: g.unit,
-      amount: Math.round(g.amount * 10) / 10,
-      approximated: g.unknown,
-      usedIn: [...g.usedIn],
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  res.json({ weekStart: req.params.weekStart, items });
 });

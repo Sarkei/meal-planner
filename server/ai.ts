@@ -14,7 +14,8 @@ import {
   type Slot,
 } from './recipeSchema';
 import { loadPlan } from './plans';
-import { loadSettings } from './auth';
+import { loadHouseholdPreferences, loadSettings } from './auth';
+import { broadcast } from './events';
 import { resolveHousehold } from './recipes';
 
 type Provider = 'deepseek' | 'mistral' | 'gemini';
@@ -121,7 +122,7 @@ async function callGemini(cfg: ProviderConfig, prompt: string, timeoutMs: number
   return text;
 }
 
-async function completeJson(prompt: string, timeoutMs = 120_000): Promise<string> {
+export async function completeAiJson(prompt: string, timeoutMs = 120_000): Promise<string> {
   const cfg = resolveProvider();
   if (!cfg) throw new Error('Kein KI-Provider konfiguriert (DEEPSEEK_API_KEY fehlt).');
   return cfg.name === 'gemini'
@@ -162,12 +163,13 @@ async function generateValidated<T>(
   let lastError = 'unbekannt';
   let currentPrompt = prompt;
   for (let i = 0; i < attempts; i++) {
-    const raw = await completeJson(currentPrompt, timeoutMs);
+    const raw = await completeAiJson(currentPrompt, timeoutMs);
     try {
       const parsed = schema.parse(parseJsonLoose(raw));
       return parsed;
     } catch (e) {
-      lastError = e instanceof Error ? e.message.slice(0, 400) : String(e).slice(0, 400);
+      const msg = e instanceof Error ? e.message.slice(0, 400) : String(e).slice(0, 400);
+      lastError = `${msg} || Anfang: ${raw.slice(0, 240)} || Ende: ${raw.slice(-160)}`;
       currentPrompt = `${prompt}\n\nDEINE LETZTE ANTWORT WAR UNGÜLTIG:\n${lastError}\nAntworte erneut, diesmal exakt im verlangten JSON-Schema.`;
     }
   }
@@ -204,8 +206,9 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
   const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
   const constraintParts = [
     (body.constraints ?? '').trim(),
-    settings.diet ? `Ernährungsform: ${settings.diet}` : '',
+    settings.diets.length ? `Ernährungsform: ${settings.diets.join(', ')}` : '',
     settings.allergies.length ? `Unverträglichkeiten/Allergien: ${settings.allergies.join(', ')}` : '',
+    settings.cuisines.length ? `Bevorzugte Küche: ${settings.cuisines.join(', ')}` : '',
     settings.maxMinutes ? `maximal ${settings.maxMinutes} Minuten Zubereitungszeit` : '',
     settings.kcalTarget ? `grob ${settings.kcalTarget} kcal pro Portion` : '',
     settings.specialWishes ? `Sonderwünsche: ${settings.specialWishes}` : '',
@@ -302,8 +305,10 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
     weekStart?: string;
     servings?: number;
     slots?: string[];
+    days?: number[];
     constraints?: string;
     mode?: 'replace' | 'fill';
+    mergeMembers?: boolean;
   };
   const access = await requireHousehold(body.householdId, req.userId!);
   if (!access.ok) {
@@ -316,18 +321,32 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
     return;
   }
   const settings = await loadSettings(req.userId!);
+  const householdPrefs = body.mergeMembers ? await loadHouseholdPreferences(body.householdId!) : null;
   const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
   const requestedSlots = (body.slots ?? settings.defaultSlots ?? ['abend']).filter(
     (s): s is Slot => slotSchema.safeParse(s).success,
   );
   const slots = requestedSlots.length ? requestedSlots : (['abend'] as Slot[]);
+  const allowedDays = Array.isArray(body.days) && body.days.length
+    ? body.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+    : [0, 1, 2, 3, 4, 5, 6];
+  const diets = [...new Set([...(householdPrefs?.diets ?? []), ...settings.diets])];
+  const allergies = [...new Set([...(householdPrefs?.allergies ?? []), ...settings.allergies])];
+  const cuisines = [...new Set([...(householdPrefs?.cuisines ?? []), ...settings.cuisines])];
+  const maxMinutes = [householdPrefs?.maxMinutes, settings.maxMinutes].filter((v): v is number => v != null);
+  const kcalTarget = householdPrefs?.kcalTarget ?? settings.kcalTarget;
+  const wishes = [settings.specialWishes, ...(householdPrefs?.specialWishes ?? [])].filter(Boolean);
   const constraintParts = [
     (body.constraints ?? '').trim(),
-    settings.diet ? `Ernährungsform: ${settings.diet}` : '',
-    settings.allergies.length ? `Unverträglichkeiten/Allergien: ${settings.allergies.join(', ')}` : '',
-    settings.maxMinutes ? `jede Mahlzeit in maximal ${settings.maxMinutes} Minuten` : '',
-    settings.kcalTarget ? `Tagesziel etwa ${settings.kcalTarget} kcal` : '',
-    settings.specialWishes ? `Sonderwünsche: ${settings.specialWishes}` : '',
+    diets.length ? `Ernährungsform (für ALLE Personen einhalten): ${diets.join(', ')}` : '',
+    allergies.length ? `Unverträglichkeiten/Allergien (streng meiden): ${allergies.join(', ')}` : '',
+    cuisines.length ? `Bevorzugte Küche: ${cuisines.join(', ')}` : '',
+    maxMinutes.length ? `jede Mahlzeit in maximal ${Math.min(...maxMinutes)} Minuten` : '',
+    kcalTarget ? `Tagesziel etwa ${kcalTarget} kcal` : '',
+    wishes.length ? `Sonderwünsche: ${wishes.join(' | ')}` : '',
+    allowedDays.length < 7
+      ? `Nur diese Wochentage planen: ${allowedDays.map((d) => WEEK_DAYS[d]).join(', ')}`
+      : '',
   ].filter(Boolean);
   const existing = await loadPlan(body.householdId!, weekStart);
   const existingEntries =
@@ -343,7 +362,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
       constraints: constraintParts.join('; ') || 'keine besonderen Vorgaben',
       existingTitles: existingEntries.map((e) => e.title).join(', ') || 'keine',
     });
-    const plan = await generateValidated(prompt, weekPlanSchema, 2, 240_000);
+    const plan = await generateValidated(prompt, weekPlanSchema, 3, 240_000);
 
     if (body.mode !== 'fill') {
       // Ersetzen: bestehende KI-Einträge der Woche entfernen, manuelle bleiben unangetastet.
@@ -365,7 +384,10 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
     let created = 0;
     const positions = new Map<number, number>();
     for (const day of plan.days) {
-      for (const meal of day.meals) {
+      if (!allowedDays.includes(day.dayIndex)) continue;
+      const dayMeals = day.meals ?? [];
+      if (!dayMeals.length) continue;
+      for (const meal of dayMeals) {
         if (busyDays.has(day.dayIndex)) continue;
         const recipe = normalizeRecipe({ ...meal.recipe, servings: meal.recipe.servings ?? servings });
         const inserted = await pool.query<{ id: string }>(
@@ -398,6 +420,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
       }
     }
     await logRun(req.userId!, 'week-plan', true, started);
+    broadcast(body.householdId!, 'plan');
     res.json({ plan: await loadPlan(body.householdId!, weekStart), created, notes: plan.notes, days: WEEK_DAYS });
   } catch (e) {
     await logRun(req.userId!, 'week-plan', false, started, e instanceof Error ? e.message : String(e));

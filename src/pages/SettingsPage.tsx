@@ -18,15 +18,29 @@ import { SLOTS, type Slot, type UserSettings } from '../lib/types';
 
 type Option = { value: string; label: string };
 
-const DIET_OPTIONS: Option[] = [
-  { value: '', label: 'Keine Vorgabe' },
-  { value: 'vegetarisch', label: 'Vegetarisch' },
-  { value: 'vegan', label: 'Vegan' },
-  { value: 'pescetarisch', label: 'Pescetarisch' },
-  { value: 'low carb', label: 'Low Carb' },
-  { value: 'high protein', label: 'High Protein' },
-  { value: 'glutenfrei', label: 'Glutenfrei' },
-  { value: 'laktosefrei', label: 'Laktosefrei' },
+const DIET_OPTIONS = [
+  'vegetarisch',
+  'vegan',
+  'pescetarisch',
+  'low carb',
+  'high protein',
+  'glutenfrei',
+  'laktosefrei',
+  'kalorienbewusst',
+];
+
+const CUISINE_OPTIONS = [
+  'Deutsch',
+  'Italienisch',
+  'Spanisch',
+  'Französisch',
+  'Griechisch',
+  'Türkisch',
+  'Asiatisch',
+  'Indisch',
+  'Mexikanisch',
+  'Amerikanisch',
+  'Orientalisch',
 ];
 
 const ALLERGY_OPTIONS = [
@@ -62,6 +76,54 @@ const KCAL_OPTIONS: Option[] = [
   { value: '700', label: '700 kcal' },
   { value: '800', label: '800 kcal' },
 ];
+
+function MultiOptionRow({
+  label,
+  options,
+  selected,
+  emptyLabel,
+  onToggle,
+  onClear,
+  capitalize,
+}: {
+  label: string;
+  options: readonly string[];
+  selected: string[];
+  emptyLabel: string;
+  onToggle: (value: string) => void;
+  onClear: () => void;
+  capitalize?: boolean;
+}) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onClear}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+            selected.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+          }`}
+        >
+          {emptyLabel}
+        </button>
+        {options.map((option) => {
+          const active = selected.includes(option);
+          return (
+            <button
+              key={option}
+              onClick={() => onToggle(option)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+              } ${capitalize ? 'capitalize' : ''}`}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function OptionRow({
   label,
@@ -248,16 +310,50 @@ export function SettingsPage() {
             onSelect={(v) => void saveSettings({ defaultServings: Number(v) })}
           />
 
-          <OptionRow
-            label="Ernährungsform"
+          <MultiOptionRow
+            label="Ernährungsform (Mehrfachauswahl)"
             options={DIET_OPTIONS}
-            selected={settings.diet}
-            onSelect={(v) => void saveSettings({ diet: v })}
+            selected={settings.diets}
+            emptyLabel="Keine Vorgabe"
+            capitalize
+            onClear={() => void saveSettings({ diets: [] })}
+            onToggle={(value) =>
+              void saveSettings({
+                diets: settings.diets.includes(value)
+                  ? settings.diets.filter((d) => d !== value)
+                  : [...settings.diets, value].slice(0, 8),
+              })
+            }
+          />
+
+          <MultiOptionRow
+            label="Präferierte Küche (Mehrfachauswahl)"
+            options={CUISINE_OPTIONS}
+            selected={settings.cuisines}
+            emptyLabel="Egal"
+            onClear={() => void saveSettings({ cuisines: [] })}
+            onToggle={(value) =>
+              void saveSettings({
+                cuisines: settings.cuisines.includes(value)
+                  ? settings.cuisines.filter((c) => c !== value)
+                  : [...settings.cuisines, value].slice(0, 10),
+              })
+            }
           />
 
           <div>
             <label className="label">Allergien & Abneigungen (Mehrfachauswahl)</label>
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void saveSettings({ allergies: [] })}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  settings.allergies.length === 0
+                    ? 'border-leaf bg-leaf text-white'
+                    : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                }`}
+              >
+                Keine Allergien
+              </button>
               {ALLERGY_OPTIONS.map((option) => {
                 const active = settings.allergies.includes(option);
                 return (
@@ -299,7 +395,7 @@ export function SettingsPage() {
             <label className="label">KI-Rezepte automatisch als Favorit</label>
             <div className="flex gap-2">
               {[
-                { value: true, label: 'Ja — landet direkt bei Favoriten' },
+                { value: true, label: 'Ja' },
                 { value: false, label: 'Nein' },
               ].map((option) => (
                 <button

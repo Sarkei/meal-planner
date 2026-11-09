@@ -8,7 +8,7 @@ BEREITS GEPLANTE GERICHTE DIESER WOCHE (nicht wiederholen): {{existingTitles}}
 
 REGELN
 1. Antworte NUR mit JSON — kein Markdown, keine Erklärungen.
-2. Genau 7 Tage: dayIndex 0 = Montag bis 6 = Sonntag. Jeder Tag enthält alle gewünschten Mahlzeiten.
+2. dayIndex 0 = Montag bis 6 = Sonntag. Gib **nur** die Tage aus, die in den Vorgaben genannt sind, und lass keine leeren Tage im JSON (Tage ohne Mahlzeiten weglassen). Jeder ausgegebene Tag enthält alle gewünschten Mahlzeiten.
 3. Kein Gericht doppelt in der Woche, keine Varianten desselben Gerichts.
 4. Jede Mahlzeit enthält ein vollständiges Rezept (Zutaten, Schritte, Nährwerte pro Portion) nach demselben Schema wie ein Einzelrezept.
 5. Die Woche soll ausgewogen sein, Zutaten sollen sich wiederverwenden lassen (wenig Reste), Gerichte sollen zusammenpassen.

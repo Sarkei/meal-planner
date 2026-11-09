@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Loader2, LogOut, Plus, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, Copy, Loader2, LogOut, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
-import type { HouseholdMember } from '../lib/types';
+import type { HouseholdMember, Slot } from '../lib/types';
+import { addDays, formatWeekLabel, mondayOf, toYmd } from '../lib/api';
+import { WEEKDAYS, SLOTS } from '../lib/types';
+import { Modal } from '../components/Modal';
 
 export function HouseholdPage() {
   const { activeHousehold, households, refresh, selectHousehold, user } = useAuth();
@@ -14,6 +17,7 @@ export function HouseholdPage() {
   const [joinCode, setJoinCode] = useState('');
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
 
   const load = useCallback(async () => {
     if (!activeHousehold) {
@@ -101,7 +105,7 @@ export function HouseholdPage() {
               className="input"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Name, z. B. Familie Nagraszus oder WG Küche"
+              placeholder="z. B. Unsere Küche oder WG-Küche"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void create();
               }}
@@ -271,69 +275,186 @@ export function HouseholdPage() {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="card space-y-3 p-5">
-          <div className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4 text-leaf" />
-            <p className="label !mb-0">Weiterem Haushalt beitreten</p>
-          </div>
-          <input
-            className="input tracking-[0.2em] uppercase"
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            placeholder="CODE"
-            maxLength={12}
-          />
-          <button className="btn btn-ghost w-full" onClick={() => void join()} disabled={busy || joinCode.trim().length < 4}>
-            <UserPlus className="h-4 w-4" /> Beitreten
-          </button>
+      <div className="card space-y-3 p-5">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-leaf" />
+          <p className="label !mb-0">Wochenplan für den ganzen Haushalt</p>
         </div>
-
-        <div className="card space-y-3 p-5">
-          <div className="flex items-center gap-2">
-            <Plus className="h-4 w-4 text-leaf" />
-            <p className="label !mb-0">Weiteren Haushalt erstellen</p>
-          </div>
-          <input
-            className="input"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="z. B. WG Küche, Ferienwohnung"
-          />
-          <button className="btn btn-ghost w-full" onClick={() => void create()} disabled={busy || newName.trim().length < 2}>
-            <Plus className="h-4 w-4" /> Anlegen
-          </button>
-        </div>
+        <p className="text-xs text-ink/55">
+          Wähle Tage und Mahlzeiten — die KI plant die Woche anhand der Vorgaben <strong>aller</strong> Mitglieder
+          (Ernährungsform, Allergien, Küche, Zeit, Kalorien, Sonderwünsche) und trägt alles direkt in den Wochenplan ein.
+        </p>
+        <button className="btn btn-primary" onClick={() => setShowPlan(true)}>
+          <Sparkles className="h-4 w-4" /> Wochenplan erstellen
+        </button>
       </div>
-
-      {households.length > 1 && (
-        <div className="card p-5">
-          <p className="label">Meine Haushalte</p>
-          <ul className="divide-y divide-ink/5">
-            {households.map((h) => (
-              <li key={h.id} className="flex items-center justify-between py-2.5">
-                <div>
-                  <p className="text-sm font-semibold">{h.name}</p>
-                  <p className="text-[11px] text-ink/45">
-                    {h.memberCount} Personen · {h.role === 'owner' ? 'Besitzer' : 'Mitglied'}
-                  </p>
-                </div>
-                {h.id === activeHousehold.id ? (
-                  <span className="chip">aktiv</span>
-                ) : (
-                  <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => selectHousehold(h.id)}>
-                    Wechseln
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <button className="btn btn-ghost !text-clay" onClick={() => void leave()} disabled={busy}>
         <LogOut className="h-4 w-4" /> {isOwner ? 'Haushalt löschen' : 'Haushalt verlassen'}
       </button>
+
+      {showPlan && (
+        <HouseholdPlanModal
+          householdId={activeHousehold.id}
+          householdName={activeHousehold.name}
+          onClose={() => setShowPlan(false)}
+        />
+      )}
     </div>
+  );
+}
+
+const PLAN_SLOTS: { id: Slot; label: string }[] = SLOTS.filter((s) => s.id !== 'snack');
+
+function HouseholdPlanModal({
+  householdId,
+  householdName,
+  onClose,
+}: {
+  householdId: string;
+  householdName: string;
+  onClose: () => void;
+}) {
+  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [slots, setSlots] = useState<Slot[]>(['abend']);
+  const [servings, setServings] = useState(2);
+  const [mode, setMode] = useState<'replace' | 'fill'>('replace');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+
+  const toggleDay = (day: number) =>
+    setDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)));
+  const toggleSlot = (slot: Slot) =>
+    setSlots((prev) => (prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]));
+
+  const create = async () => {
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const data = await api<{ created: number; notes: string }>('/ai/week', {
+        method: 'POST',
+        body: {
+          householdId,
+          weekStart,
+          days,
+          slots,
+          servings,
+          mode,
+          mergeMembers: true,
+          constraints: notes,
+        },
+      });
+      setResult(`${data.created} Mahlzeiten für ${householdName} geplant. ${data.notes}`.trim());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Der Wochenplan konnte nicht erstellt werden.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="Wochenplan für den Haushalt" subtitle="Vorgaben aller Mitglieder werden berücksichtigt" onClose={onClose} wide>
+      <div className="space-y-4">
+        <div>
+          <label className="label">Woche</label>
+          <div className="flex items-center gap-2">
+            <button className="btn btn-ghost !px-2 !py-1 text-xs" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+              ‹
+            </button>
+            <span className="text-sm font-semibold">{formatWeekLabel(weekStart)}</span>
+            <button className="btn btn-ghost !px-2 !py-1 text-xs" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+              ›
+            </button>
+            <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => setWeekStart(mondayOf(new Date()))}>
+              Diese Woche
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">An welchen Tagen?</label>
+          <div className="flex flex-wrap gap-2">
+            {WEEKDAYS.map((day, index) => (
+              <button
+                key={day}
+                onClick={() => toggleDay(index)}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                  days.includes(index) ? 'border-leaf bg-leaf-soft text-leaf' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                }`}
+              >
+                {day.slice(0, 2)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Welche Mahlzeiten?</label>
+          <div className="flex flex-wrap gap-2">
+            {PLAN_SLOTS.map((slot) => (
+              <button
+                key={slot.id}
+                onClick={() => toggleSlot(slot.id)}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                  slots.includes(slot.id) ? 'border-leaf bg-leaf-soft text-leaf' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                }`}
+              >
+                {slot.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Portionen pro Mahlzeit</label>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              className="input"
+              value={servings}
+              onChange={(e) => setServings(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="label">Bestehendes</label>
+            <select className="select" value={mode} onChange={(e) => setMode(e.target.value as 'replace' | 'fill')}>
+              <option value="replace">Ersetzen</option>
+              <option value="fill">Nur leere Tage füllen</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Zusätzliche Vorgaben (optional)</label>
+          <input
+            className="input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="z. B. am Wochenende aufwendiger kochen, wenig Fleisch"
+          />
+        </div>
+
+        <button className="btn btn-primary w-full" onClick={() => void create()} disabled={busy || days.length === 0 || slots.length === 0}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {busy ? 'Woche wird geplant …' : 'Wochenplan erstellen'}
+        </button>
+
+        {result && (
+          <div className="space-y-2 rounded-xl bg-leaf-soft px-3 py-2 text-sm text-leaf">
+            <p>{result}</p>
+            <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => window.location.assign(`#/week`)}>
+              Zum Wochenplan
+            </button>
+          </div>
+        )}
+        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      </div>
+    </Modal>
   );
 }

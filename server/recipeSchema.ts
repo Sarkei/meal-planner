@@ -85,8 +85,8 @@ export const weekPlanSchema = z.object({
               recipe: aiRecipeSchema,
             }),
           )
-          .min(1)
-          .max(6),
+          .max(6)
+          .default([]),
       }),
     )
     .min(1)

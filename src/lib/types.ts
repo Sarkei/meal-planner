@@ -127,8 +127,9 @@ export type RecipeQuery = {
 export type UserSettings = {
   theme: 'system' | 'light' | 'dark';
   defaultServings: number;
-  diet: string;
+  diets: string[];
   allergies: string[];
+  cuisines: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
@@ -139,8 +140,9 @@ export type UserSettings = {
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'system',
   defaultServings: 2,
-  diet: '',
+  diets: [],
   allergies: [],
+  cuisines: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,

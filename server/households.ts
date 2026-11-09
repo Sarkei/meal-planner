@@ -36,6 +36,12 @@ householdsRouter.post('/', async (req: AuthRequest, res) => {
     fail(res, 400, 'invalid-input', 'Bitte einen Namen für den Haushalt angeben.');
     return;
   }
+  // Genau ein Haushalt pro Person — kein Beitritt zu einem zweiten.
+  const already = await pool.query('SELECT household_id FROM household_members WHERE user_id = $1', [req.userId]);
+  if (already.rowCount) {
+    fail(res, 409, 'one-household-only', 'Du hast schon einen Haushalt. Verlasse ihn zuerst.');
+    return;
+  }
   const household = await createHouseholdWithOwner(parsed.data.name, req.userId!);
   res.status(201).json({ household: { ...household, role: 'owner', memberCount: 1, recipeCount: 0 } });
 });
@@ -44,6 +50,11 @@ householdsRouter.post('/join', async (req: AuthRequest, res) => {
   const parsed = z.object({ code: z.string().trim().min(4).max(16) }).safeParse(req.body);
   if (!parsed.success) {
     fail(res, 400, 'invalid-input', 'Einladungscode angeben.');
+    return;
+  }
+  const already = await pool.query('SELECT household_id FROM household_members WHERE user_id = $1', [req.userId]);
+  if (already.rowCount) {
+    fail(res, 409, 'one-household-only', 'Du bist schon in einem Haushalt. Verlasse ihn zuerst.');
     return;
   }
   const code = parsed.data.code.toUpperCase();
