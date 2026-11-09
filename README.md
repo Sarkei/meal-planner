@@ -212,3 +212,19 @@ Ohne API-Key startet die App normal; nur die KI-Endpunkte antworten dann mit 503
 - Zutaten ohne Menge erscheinen in der Einkaufsliste mit `~` („nach Bedarf").
 - Der KI-Modus `replace` löscht nur Einträge, deren Rezept `source = 'ai'` ist — manuell
   eingetragene Mahlzeiten bleiben erhalten.
+
+## Rezeptfilter
+
+Die Bibliothek filtert nach denselben Kriterien wie die KI-Vorgaben im Profil:
+
+- **Ernährungsform** (Mehrfachauswahl, „Egal"): vegetarisch, vegan, pescetarisch, low carb,
+  high protein, glutenfrei, laktosefrei, kalorienbewusst
+- **Präferierte Küche** (Mehrfachauswahl, „Egal")
+- **Allergien ausschließen** („Keine Allergien" = keine Einschränkung)
+- **Max. Zeit** und **Kalorien** als feste Optionen, **Protein** als Mindestwert
+- zusätzlich Tags, Quelle und Autor
+
+Die Merkmale stehen am Rezept (`diets`, `cuisines`, `allergens`) und werden aus Titel, Tags und
+Zutaten abgeleitet (`server/recipeMeta.ts`); bestehende Rezepte rüstet der Server beim Start nach.
+API: `?diets=…&cuisines=…&excludeAllergens=…`.
+
