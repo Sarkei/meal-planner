@@ -228,3 +228,16 @@ Die Merkmale stehen am Rezept (`diets`, `cuisines`, `allergens`) und werden aus 
 Zutaten abgeleitet (`server/recipeMeta.ts`); bestehende Rezepte rüstet der Server beim Start nach.
 API: `?diets=…&cuisines=…&excludeAllergens=…`.
 
+
+## KI-Bilder für Rezepte
+
+Beim Speichern eines Rezepts ohne Bild erzeugt die App im Hintergrund eine **gezeichnete
+Illustration** des fertigen Gerichts:
+
+- Die Text-KI (DeepSeek) beschreibt das Gericht in einer englischen Zeile — ausschließlich aus den
+  Zutaten, die im Rezept stehen, damit nichts erfunden wird.
+- Daraus erzeugt ein Bildmodell (Pollinations/FLUX, kostenlos) eine Illustration im Comic-Stil.
+- Das Bild wird auf 768×576 gebracht, das Wasserzeichen entfernt und am Rezept gespeichert.
+- Auf der Rezeptseite: „Bild neu zeichnen" jederzeit per Klick; während der Erzeugung läuft ein
+  Hinweis mit automatischer Aktualisierung.
+
