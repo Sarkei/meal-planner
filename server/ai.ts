@@ -21,6 +21,19 @@ import { resolveHousehold } from './recipes';
 
 type Provider = 'deepseek' | 'mistral' | 'gemini';
 
+/** Zufälliges Wochenmotto — verhindert, dass die KI jede Woche dieselben Gerichte vorschlägt. */
+const WEEK_MOTTOS = [
+  'Hausmannskost, wie bei Oma',
+  'mediterran (italienisch, griechisch, spanisch)',
+  'deftig mit Ofengemüse',
+  'asiatisch angehaucht, aber mit Zutaten aus dem Supermarkt',
+  'schnelle Pfannengerichte unter 30 Minuten',
+  'Eintöpfe und Aufläufe',
+  'Familiengerichte mit Hackfleisch oder Geflügel',
+  'Fisch und vegetarische Ofengerichte',
+  'Resteküche: wenige Zutaten, die sich wiederverwenden lassen',
+];
+
 type ProviderConfig = {
   name: Provider;
   apiKey: string;
@@ -81,7 +94,12 @@ export function resolveProvider(): ProviderConfig | null {
   return usable.find((c) => c.name === preferred) ?? usable[0];
 }
 
-async function callOpenAiCompatible(cfg: ProviderConfig, prompt: string, timeoutMs: number): Promise<string> {
+async function callOpenAiCompatible(
+  cfg: ProviderConfig,
+  prompt: string,
+  timeoutMs: number,
+  temperature = 0.5,
+): Promise<string> {
   const resp = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
@@ -91,7 +109,7 @@ async function callOpenAiCompatible(cfg: ProviderConfig, prompt: string, timeout
         { role: 'system', content: 'Du antwortest ausschließlich mit gültigem JSON. Kein Markdown, keine Kommentare.' },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.5,
+      temperature,
       max_tokens: 8000,
       response_format: { type: 'json_object' },
     }),
@@ -104,13 +122,13 @@ async function callOpenAiCompatible(cfg: ProviderConfig, prompt: string, timeout
   return content;
 }
 
-async function callGemini(cfg: ProviderConfig, prompt: string, timeoutMs: number): Promise<string> {
+async function callGemini(cfg: ProviderConfig, prompt: string, timeoutMs: number, temperature = 0.5): Promise<string> {
   const resp = await fetch(`${cfg.baseUrl}/models/${encodeURIComponent(cfg.model)}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.apiKey },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.5, responseMimeType: 'application/json', maxOutputTokens: 8192 },
+      generationConfig: { temperature, responseMimeType: 'application/json', maxOutputTokens: 8192 },
     }),
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -123,12 +141,12 @@ async function callGemini(cfg: ProviderConfig, prompt: string, timeoutMs: number
   return text;
 }
 
-export async function completeAiJson(prompt: string, timeoutMs = 120_000): Promise<string> {
+export async function completeAiJson(prompt: string, timeoutMs = 120_000, temperature = 0.5): Promise<string> {
   const cfg = resolveProvider();
   if (!cfg) throw new Error('Kein KI-Provider konfiguriert (DEEPSEEK_API_KEY fehlt).');
   return cfg.name === 'gemini'
-    ? callGemini(cfg, prompt, timeoutMs)
-    : callOpenAiCompatible(cfg, prompt, timeoutMs);
+    ? callGemini(cfg, prompt, timeoutMs, temperature)
+    : callOpenAiCompatible(cfg, prompt, timeoutMs, temperature);
 }
 
 function parseJsonLoose(raw: string): unknown {
@@ -160,11 +178,13 @@ async function generateValidated<T>(
   schema: z.ZodType<T>,
   attempts = 2,
   timeoutMs = 120_000,
+  temperature = 0.5,
 ): Promise<T> {
   let lastError = 'unbekannt';
   let currentPrompt = prompt;
   for (let i = 0; i < attempts; i++) {
-    const raw = await completeAiJson(currentPrompt, timeoutMs);
+    // Beim zweiten Versuch etwas kühler, damit die Korrektur nicht wieder ausfranst
+    const raw = await completeAiJson(currentPrompt, timeoutMs, i === 0 ? temperature : Math.min(temperature, 0.4));
     try {
       const parsed = schema.parse(parseJsonLoose(raw));
       return parsed;
@@ -436,6 +456,16 @@ export async function planWeekForUser(
       ? `Nur diese Wochentage planen: ${allowedDays.map((d) => WEEK_DAYS[d]).join(', ')}`
       : '',
   ].filter(Boolean);
+  // Abwechslung: was in den letzten drei Wochen schon gekocht wurde, nicht wiederholen
+  const recent = await pool.query<{ title: string }>(
+    `SELECT title FROM recipes
+      WHERE household_id = $1 AND created_at > now() - interval '21 days'
+      ORDER BY created_at DESC LIMIT 40`,
+    [body.householdId],
+  );
+  const recentTitles = [...new Set(recent.rows.map((r) => r.title.trim()).filter(Boolean))].slice(0, 20);
+  const motto = WEEK_MOTTOS[Math.floor(Math.random() * WEEK_MOTTOS.length)];
+
   const existing = await loadPlan(body.householdId!, weekStart);
   const existingEntries =
     (existing.entries as Array<{ title: string; dayIndex: number; slot: string }>) ?? [];
@@ -449,8 +479,11 @@ export async function planWeekForUser(
       slots: slots.map((s) => `${s} (${SLOTS.includes(s) ? s : ''})`).join(', '),
       constraints: constraintParts.join('; ') || 'keine besonderen Vorgaben',
       existingTitles: existingEntries.map((e) => e.title).join(', ') || 'keine',
+      recentTitles: recentTitles.join(' | ') || 'keine',
+      motto,
     });
-    const plan = await generateValidated(prompt, weekPlanSchema, 3, 240_000);
+    // Höhere Temperatur: sonst liefert das Modell Woche für Woche dieselben Gerichte
+    const plan = await generateValidated(prompt, weekPlanSchema, 3, 240_000, 0.9);
 
     if (body.mode !== 'fill') {
       // Ersetzen: bestehende KI-Einträge der Woche entfernen, manuelle bleiben unangetastet.

@@ -78,6 +78,12 @@ async function start(): Promise<void> {
   await initDb();
   const filled = await backfillRecipeMeta();
   if (filled) console.log(`📋 ${filled} Rezepte mit Diät/Küche/Allergenen nachgerüstet`);
+  // Altbestand: früher gab es ein einzelnes Feld `diet`; in `diets` überführen, damit die Oberfläche es zeigt
+  await pool.query(
+    `UPDATE user_settings
+        SET data = jsonb_set(data - 'diet', '{diets}', jsonb_build_array(data->>'diet'))
+      WHERE data ? 'diet' AND NOT data ? 'diets'`,
+  );
   startImageWorker();
   const ai = resolveProvider();
   app.listen(PORT, () => {
