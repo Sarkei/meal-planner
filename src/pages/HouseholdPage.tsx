@@ -91,7 +91,7 @@ export function HouseholdPage() {
       try {
         const data = await api<{ preferences: HouseholdPreferences }>(
           `/households/${activeHousehold.id}/preferences`,
-          { method: 'PUT', body: JSON.stringify(next) },
+          { method: 'PUT', body: next },
         );
         setPrefs(data.preferences);
         setPrefsSaved(true);

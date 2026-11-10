@@ -62,6 +62,12 @@ if (existsSync(distDir)) {
 }
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = (err as { status?: number }).status;
+  if (status === 400) {
+    // Ungültiger oder doppelt kodierter Request-Body — das ist ein Client-Fehler
+    res.status(400).json({ error: 'invalid-json', message: 'Anfrage konnte nicht gelesen werden.' });
+    return;
+  }
   console.error('[server] unhandled', err);
   res.status(500).json({ error: 'internal', message: 'Interner Fehler.' });
 });

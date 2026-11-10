@@ -27,7 +27,13 @@ export async function api<T>(path: string, options: { method?: string; body?: un
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    // Strings werden unverändert gesendet — sonst entsteht doppelt kodiertes JSON
+    body:
+      options.body === undefined
+        ? undefined
+        : typeof options.body === 'string'
+          ? options.body
+          : JSON.stringify(options.body),
   });
   const text = await res.text();
   const data = text ? (JSON.parse(text) as unknown) : {};
