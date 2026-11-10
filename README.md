@@ -253,3 +253,25 @@ Küchengeräte stehen zusätzlich im Profil (`appliances`) — die KI schlägt n
 den vorhandenen Geräten machbar sind. Auswahl: Ofen, Herd, Mikrowelle, Thermomix, Reiskocher,
 Heißluftfritteuse, Slow Cooker, Grill, Kontaktgrill, Küchenmaschine, Pürierstab, Dampfgarer.
 
+
+## KI-Chat-Assistent
+
+Der Tab **Assistent** ist ein Chat, der die App wirklich bedient — nicht nur erklärt. Er kennt
+Profil, Haushalt, Woche und Sammlung und ändert auf Zuruf:
+
+- **Rezepte**: suchen mit allen Filtern (Ernährungsform, Küche, Allergien, Zeit, Kalorien), Details lesen, Favorit setzen
+- **Wochenplan**: lesen, neu planen, einzelne Mahlzeiten eintragen/entfernen, ganze Woche leeren
+- **Vorgaben**: Ernährungsform, Küche, Allergien, Geräte, Zeit, Kalorien — persönlich und für den Haushalt
+- **Abneigungen**: Lebensmittel eintragen/entfernen, wahlweise im Profil oder im Haushalt
+- **Einkaufsliste**: lesen und ergänzen
+
+„Der Wochenplan gefällt mir nicht" führt also zu einer neuen Planung, nicht zu einer Erklärung.
+Technisch läuft das über Function Calling (DeepSeek/Mistral), jede Aktion mit den Rechten des
+angemeldeten Nutzers. Der Verlauf bleibt pro Konto gespeichert („Neuer Chat" löscht ihn).
+
+## Lebensmittel, die nicht gemocht werden
+
+Eine freie Liste im Profil **und** im Haushalt („Lebensmittel, die niemand mag"). Eintragen mit
+Enter, Chip mit X entfernen. Die KI erhält die Zeile „Diese Lebensmittel werden nicht gemocht,
+nicht verwenden" in Rezept- und Wochenplan-Prompts — und der Chat kann die Liste lesen und pflegen.
+
