@@ -284,12 +284,16 @@ export function SettingsPage() {
             Diese Angaben nutzt der Assistent automatisch, wenn du Rezepte oder Wochen erstellen lässt.
           </p>
         <div className="space-y-5">
+<p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">Grundlagen</p>
+
           <OptionRow
             label="Portionen (Standard)"
             options={[1, 2, 3, 4, 6, 8].map((n) => ({ value: String(n), label: `${n}` }))}
             selected={String(settings.defaultServings)}
             onSelect={(v) => void saveSettings({ defaultServings: Number(v) })}
           />
+
+<p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">Ernährung</p>
 
           <MultiOptionRow
             label="Ernährungsform (Mehrfachauswahl)"
@@ -307,8 +311,58 @@ export function SettingsPage() {
             }
           />
 
-          <MultiOptionRow
-            label="Präferierte Küche (Mehrfachauswahl)"
+          <div>
+            <label className="label">Allergien & Abneigungen (Mehrfachauswahl)</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void saveSettings({ allergies: [] })}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  settings.allergies.length === 0
+                    ? 'border-leaf bg-leaf text-white'
+                    : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                }`}
+              >
+                Keine Allergien
+              </button>
+              {ALLERGY_OPTIONS.map((option) => {
+                const active = settings.allergies.includes(option);
+                return (
+                  <button
+                    key={option}
+                    onClick={() =>
+                      void saveSettings({
+                        allergies: active
+                          ? settings.allergies.filter((a) => a !== option)
+                          : [...settings.allergies, option].slice(0, 12),
+                      })
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+<div>
+            <label className="label">Diese Lebensmittel mag ich nicht</label>
+            <p className="mb-2 text-xs text-ink/50">
+              Die KI meidet sie in Rezepten und Wochenplänen. Einzeln eintragen, Enter hängt an.
+            </p>
+            <TagListInput
+              value={settings.dislikes}
+              onChange={(dislikes) => void saveSettings({ dislikes })}
+              placeholder="z. B. Rosenkohl, Leber, Koriander"
+            />
+          </div>
+
+<p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">Küche &amp; Geräte</p>
+
+<MultiOptionRow
+  label="Präferierte Küche (Mehrfachauswahl)"
             options={CUISINE_OPTIONS}
             selected={settings.cuisines}
             emptyLabel="Egal"
@@ -353,55 +407,7 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div>
-            <label className="label">Diese Lebensmittel mag ich nicht</label>
-            <p className="mb-2 text-xs text-ink/50">
-              Die KI meidet sie in Rezepten und Wochenplänen. Einzeln eintragen, Enter hängt an.
-            </p>
-            <TagListInput
-              value={settings.dislikes}
-              onChange={(dislikes) => void saveSettings({ dislikes })}
-              placeholder="z. B. Rosenkohl, Leber, Koriander"
-            />
-          </div>
-
-          <div>
-            <label className="label">Allergien & Abneigungen (Mehrfachauswahl)</label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => void saveSettings({ allergies: [] })}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  settings.allergies.length === 0
-                    ? 'border-leaf bg-leaf text-white'
-                    : 'border-ink/15 text-ink/60 hover:border-leaf/40'
-                }`}
-              >
-                Keine Allergien
-              </button>
-              {ALLERGY_OPTIONS.map((option) => {
-                const active = settings.allergies.includes(option);
-                return (
-                  <button
-                    key={option}
-                    onClick={() =>
-                      void saveSettings({
-                        allergies: active
-                          ? settings.allergies.filter((a) => a !== option)
-                          : [...settings.allergies, option].slice(0, 12),
-                      })
-                    }
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
-                    }`}
-                  >
-                    {option}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <OptionRow
+<OptionRow
             label="Max. Zubereitungszeit"
             options={TIME_OPTIONS}
             selected={settings.maxMinutes == null ? '' : String(settings.maxMinutes)}
@@ -414,6 +420,8 @@ export function SettingsPage() {
             selected={settings.kcalTarget == null ? '' : String(settings.kcalTarget)}
             onSelect={(v) => void saveSettings({ kcalTarget: v === '' ? null : Number(v) })}
           />
+
+<p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">KI-Verhalten</p>
 
           <div>
             <label className="label">KI-Rezepte automatisch als Favorit</label>

@@ -303,7 +303,7 @@ export function HouseholdPage() {
               {isOwner ? 'Besitzer' : 'Mitglied'}
             </p>
           </div>
-          <div className="rounded-xl border border-dashed border-leaf/40 bg-leaf-soft/50 px-4 py-3 text-center">
+          <div className="rounded-xl border border-dashed border-leaf/40 px-4 py-3 text-center">
             <p className="text-[10px] font-bold uppercase tracking-widest text-leaf/70">Einladungscode</p>
             <p className="font-display text-2xl font-bold tracking-[0.18em] text-leaf">{activeHousehold.inviteCode}</p>
             <div className="mt-2 flex items-center justify-center gap-2">
@@ -353,176 +353,177 @@ export function HouseholdPage() {
             )}
           </div>
 
-        <ChipGroup
-          label="Ernährungsform"
-          options={DIET_OPTIONS}
-          selected={prefs.diets}
-          emptyLabel="Egal"
-          onClear={() => void savePrefs({ diets: [] })}
-          onToggle={(value) =>
-            void savePrefs({
-              diets: prefs.diets.includes(value)
-                ? prefs.diets.filter((d) => d !== value)
-                : [...prefs.diets, value].slice(0, 8),
-            })
-          }
-        />
+          {/* 1. Wochenplan — bestimmt, was und wie viel geplant wird */}
+          <div className="space-y-3 rounded-xl border border-ink/10 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">Wochenplan</p>
 
-        <ChipGroup
-          label="Präferierte Küche"
-          options={CUISINE_OPTIONS}
-          selected={prefs.cuisines}
-          emptyLabel="Egal"
-          onClear={() => void savePrefs({ cuisines: [] })}
-          onToggle={(value) =>
-            void savePrefs({
-              cuisines: prefs.cuisines.includes(value)
-                ? prefs.cuisines.filter((c) => c !== value)
-                : [...prefs.cuisines, value].slice(0, 10),
-            })
-          }
-        />
+            <div>
+              <span className="label !mb-1">An welchen Tagen?</span>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((day, index) => {
+                  const active = prefs.planDays.includes(index);
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => {
+                        const next = active ? prefs.planDays.filter((d) => d !== index) : [...prefs.planDays, index].sort();
+                        void savePrefs({ planDays: next.length ? next : [index] });
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                      }`}
+                    >
+                      {day.slice(0, 2)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        <ChipGroup
-          label="Allergien & Abneigungen"
-          options={ALLERGY_OPTIONS}
-          selected={prefs.allergies}
-          emptyLabel="Keine Allergien"
-          onClear={() => void savePrefs({ allergies: [] })}
-          onToggle={(value) =>
-            void savePrefs({
-              allergies: prefs.allergies.includes(value)
-                ? prefs.allergies.filter((a) => a !== value)
-                : [...prefs.allergies, value].slice(0, 12),
-            })
-          }
-        />
+            <div>
+              <span className="label !mb-1">Welche Mahlzeiten?</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: 'fruehstueck', label: 'Frühstück' },
+                  { id: 'mittag', label: 'Mittag' },
+                  { id: 'abend', label: 'Abend' },
+                  { id: 'snack', label: 'Snack' },
+                ].map((slot) => {
+                  const active = prefs.planSlots.includes(slot.id);
+                  return (
+                    <button
+                      key={slot.id}
+                      onClick={() => {
+                        const next = active ? prefs.planSlots.filter((s) => s !== slot.id) : [...prefs.planSlots, slot.id];
+                        void savePrefs({ planSlots: next.length ? next : [slot.id] });
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                      }`}
+                    >
+                      {slot.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        <ChipGroup
-          label="Geräte im Haushalt"
-          hint="Die KI plant nur Rezepte, die mit diesen Küchengeräten machbar sind."
-          options={APPLIANCE_OPTIONS}
-          selected={prefs.appliances}
-          emptyLabel="Keine Angabe"
-          onClear={() => void savePrefs({ appliances: [] })}
-          onToggle={(value) =>
-            void savePrefs({
-              appliances: prefs.appliances.includes(value)
-                ? prefs.appliances.filter((a) => a !== value)
-                : [...prefs.appliances, value].slice(0, 12),
-            })
-          }
-        />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-ink/60">
+                Portionen pro Mahlzeit
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  className="input !w-20 !py-1 text-center"
+                  value={prefs.planServings}
+                  onChange={(e) => setPrefs({ ...prefs, planServings: Number(e.target.value) || 1 })}
+                  onBlur={() => void savePrefs({ planServings: prefs.planServings })}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-xs font-semibold text-ink/60">
+                <input
+                  type="checkbox"
+                  checked={prefs.autoPlan}
+                  onChange={(e) => void savePrefs({ autoPlan: e.target.checked })}
+                  className="h-4 w-4 accent-[var(--color-leaf)]"
+                />
+                Freitags die Folgewoche vorbauen
+              </label>
+            </div>
+            <p className="text-[11px] text-ink/45">
+              Danach richtet sich jeder erzeugte Plan — auch der, den die App freitags automatisch vorbaut.
+            </p>
+          </div>
 
-        <div className="rounded-2xl border border-ink/10 bg-cream/60 p-3">
-          <p className="label">Wochenplan-Vorgaben</p>
-          <p className="mb-3 text-xs text-ink/50">
-            Danach richtet sich jeder erzeugte Wochenplan — auch der, den die App freitags automatisch vorbaut.
-          </p>
-
-          <div className="mb-3">
-            <span className="text-xs font-semibold text-ink/60">Tage</span>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {WEEKDAYS.map((day, index) => {
-                const active = prefs.planDays.includes(index);
-                return (
-                  <button
-                    key={day}
-                    onClick={() => {
-                      const next = active
-                        ? prefs.planDays.filter((d) => d !== index)
-                        : [...prefs.planDays, index].sort();
-                      void savePrefs({ planDays: next.length ? next : [index] });
-                    }}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
-                    }`}
-                  >
-                    {day.slice(0, 2)}
-                  </button>
-                );
-              })}
+          {/* 2. Ernährung */}
+          <div className="space-y-3 rounded-xl border border-ink/10 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">Ernährung</p>
+            <ChipGroup
+              label="Ernährungsform"
+              options={DIET_OPTIONS}
+              selected={prefs.diets}
+              emptyLabel="Egal"
+              onClear={() => void savePrefs({ diets: [] })}
+              onToggle={(value) =>
+                void savePrefs({
+                  diets: prefs.diets.includes(value)
+                    ? prefs.diets.filter((d) => d !== value)
+                    : [...prefs.diets, value].slice(0, 8),
+                })
+              }
+            />
+            <ChipGroup
+              label="Allergien & Unverträglichkeiten"
+              options={ALLERGY_OPTIONS}
+              selected={prefs.allergies}
+              emptyLabel="Keine Allergien"
+              onClear={() => void savePrefs({ allergies: [] })}
+              onToggle={(value) =>
+                void savePrefs({
+                  allergies: prefs.allergies.includes(value)
+                    ? prefs.allergies.filter((a) => a !== value)
+                    : [...prefs.allergies, value].slice(0, 12),
+                })
+              }
+            />
+            <div>
+              <label className="label">Lebensmittel, die niemand mag</label>
+              <p className="mb-2 text-xs text-ink/50">Einzeln eintragen, Enter hängt an.</p>
+              <TagListInput
+                value={prefs.dislikes}
+                onChange={(dislikes) => void savePrefs({ dislikes })}
+                placeholder="z. B. Rosenkohl, Leber"
+              />
             </div>
           </div>
 
-          <div className="mb-3">
-            <span className="text-xs font-semibold text-ink/60">Mahlzeiten pro Tag</span>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {[
-                { id: 'fruehstueck', label: 'Frühstück' },
-                { id: 'mittag', label: 'Mittag' },
-                { id: 'abend', label: 'Abend' },
-                { id: 'snack', label: 'Snack' },
-              ].map((slot) => {
-                const active = prefs.planSlots.includes(slot.id);
-                return (
-                  <button
-                    key={slot.id}
-                    onClick={() => {
-                      const next = active
-                        ? prefs.planSlots.filter((s) => s !== slot.id)
-                        : [...prefs.planSlots, slot.id];
-                      void savePrefs({ planSlots: next.length ? next : [slot.id] });
-                    }}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
-                    }`}
-                  >
-                    {slot.label}
-                  </button>
-                );
-              })}
-            </div>
+          {/* 3. Küche und Geräte */}
+          <div className="space-y-3 rounded-xl border border-ink/10 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">Küche & Geräte</p>
+            <ChipGroup
+              label="Präferierte Küche"
+              options={CUISINE_OPTIONS}
+              selected={prefs.cuisines}
+              emptyLabel="Egal"
+              onClear={() => void savePrefs({ cuisines: [] })}
+              onToggle={(value) =>
+                void savePrefs({
+                  cuisines: prefs.cuisines.includes(value)
+                    ? prefs.cuisines.filter((c) => c !== value)
+                    : [...prefs.cuisines, value].slice(0, 10),
+                })
+              }
+            />
+            <ChipGroup
+              label="Geräte im Haushalt"
+              hint="Die KI plant nur Rezepte, die mit diesen Küchengeräten machbar sind."
+              options={APPLIANCE_OPTIONS}
+              selected={prefs.appliances}
+              emptyLabel="Keine Angabe"
+              onClear={() => void savePrefs({ appliances: [] })}
+              onToggle={(value) =>
+                void savePrefs({
+                  appliances: prefs.appliances.includes(value)
+                    ? prefs.appliances.filter((a) => a !== value)
+                    : [...prefs.appliances, value].slice(0, 12),
+                })
+              }
+            />
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-xs font-semibold text-ink/60">
-              Portionen pro Mahlzeit
-              <input
-                type="number"
-                min={1}
-                max={12}
-                className="input !w-20 !py-1 text-center"
-                value={prefs.planServings}
-                onChange={(e) => setPrefs({ ...prefs, planServings: Number(e.target.value) || 1 })}
-                onBlur={() => void savePrefs({ planServings: prefs.planServings })}
-              />
-            </label>
-            <label className="flex items-center gap-2 text-xs font-semibold text-ink/60">
-              <input
-                type="checkbox"
-                checked={prefs.autoPlan}
-                onChange={(e) => void savePrefs({ autoPlan: e.target.checked })}
-                className="h-4 w-4 accent-[var(--color-leaf)]"
-              />
-              Freitags die Folgewoche vorbauen
-            </label>
+          {/* 4. Notiz */}
+          <div>
+            <label className="label">Besonderheiten</label>
+            <textarea
+              className="input min-h-[64px] resize-y"
+              placeholder="z. B. keine scharfen Gerichte für die Kinder, samstags immer Pizza"
+              value={prefs.note}
+              maxLength={400}
+              onChange={(e) => setPrefs({ ...prefs, note: e.target.value })}
+              onBlur={() => void savePrefs({ note: prefs.note })}
+            />
           </div>
-        </div>
-
-        <div>
-          <label className="label">Lebensmittel, die niemand mag</label>
-          <p className="mb-2 text-xs text-ink/50">
-            Gilt für alle Mitglieder — die KI meidet sie bei Rezepten und Wochenplänen.
-          </p>
-          <TagListInput
-            value={prefs.dislikes}
-            onChange={(dislikes) => void savePrefs({ dislikes })}
-            placeholder="z. B. Rosenkohl, Leber"
-          />
-        </div>
-
-        <div>
-          <label className="label">Besonderheiten</label>
-          <textarea
-            className="input min-h-[64px] resize-y"
-            placeholder="z. B. keine scharfen Gerichte für die Kinder, samstags immer Pizza"
-            value={prefs.note}
-            maxLength={400}
-            onChange={(e) => setPrefs({ ...prefs, note: e.target.value })}
-            onBlur={() => void savePrefs({ note: prefs.note })}
-          />
-        </div>
         </Collapsible>
       </div>
 
