@@ -30,9 +30,7 @@ export function WeekPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pickerDay, setPickerDay] = useState<number | null>(null);
-  const [confirmPlan, setConfirmPlan] = useState(false);
-  const [info, setInfo] = useState<string | null>(null);
-  const [planning, setPlanning] = useState(false);
+
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget>(null);
   const [busy, setBusy] = useState(false);
@@ -90,25 +88,6 @@ export function WeekPage() {
   }
 
   const [confirmClear, setConfirmClear] = useState(false);
-
-  /** Wochenplan nach den Haushalts-Vorgaben (Tage, Mahlzeiten, Portionen) neu erzeugen. */
-  const planWeek = async () => {
-    setPlanning(true);
-    setError(null);
-    try {
-      const data = await api<{ plan: WeekPlan; created: number; reused: number }>('/ai/week', {
-        method: 'POST',
-        body: { householdId: activeHousehold.id, weekStart, mode: 'replace', mergeMembers: true },
-      });
-      setPlan(data.plan);
-      setConfirmPlan(false);
-      setInfo(`${data.created} neu geplant, ${data.reused} aus der Sammlung übernommen.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Die Woche konnte nicht geplant werden.');
-    } finally {
-      setPlanning(false);
-    }
-  };
 
   const clearWeek = async () => {
     setBusy(true);
@@ -224,37 +203,10 @@ export function WeekPage() {
               <Trash2 className="h-4 w-4" /> Woche leeren
             </button>
           )}
-          <button className="btn btn-primary" onClick={() => setConfirmPlan(true)} disabled={planning}>
-            {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {planning ? 'Wird geplant …' : 'Woche planen'}
-          </button>
         </div>
       </div>
 
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
-      {info && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm font-medium text-leaf">{info}</p>}
-      {confirmPlan && (
-        <div className="card flex flex-col gap-3 border-amber-200 bg-amber-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-medium text-ink/75">
-            Bestätigen Sie, dass der Wochenplan überschrieben wird. Die Tage, Mahlzeiten und Portionen kommen aus
-            den Haushalts-Vorgaben.
-            {plan && plan.entries.length > 0 && (
-              <span className="mt-1 block text-xs text-ink/55">
-                {plan.entries.length} bestehende Einträge werden ersetzt (Rezepte bleiben in der Sammlung).
-              </span>
-            )}
-          </p>
-          <div className="flex gap-2">
-            <button className="btn btn-ghost" onClick={() => setConfirmPlan(false)} disabled={planning}>
-              Abbrechen
-            </button>
-            <button className="btn btn-primary" onClick={() => void planWeek()} disabled={planning}>
-              {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Planen
-            </button>
-          </div>
-        </div>
-      )}
       {confirmClear && (
         <div className="card flex flex-col gap-3 border-red-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium text-ink/70">

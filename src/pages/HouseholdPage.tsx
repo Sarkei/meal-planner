@@ -27,6 +27,7 @@ import { WEEKDAYS, SLOTS } from '../lib/types';
 import { Modal } from '../components/Modal';
 import { TagListInput } from '../components/TagListInput';
 import { Collapsible } from '../components/Collapsible';
+import { PlanWeekModal } from '../components/PlanWeekModal';
 
 type ChipGroupProps = {
   label: string;
@@ -81,7 +82,7 @@ export function HouseholdPage() {
   const [joinCode, setJoinCode] = useState('');
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [showPlan, setShowPlan] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
   const [prefs, setPrefs] = useState<HouseholdPreferences>(EMPTY_HOUSEHOLD_PREFERENCES);
   const [prefsSaved, setPrefsSaved] = useState(false);
 
@@ -512,6 +513,14 @@ export function HouseholdPage() {
             />
           </div>
 
+          {/* Wochenplan direkt hier starten */}
+          <button
+            className="btn btn-primary w-full"
+            onClick={() => setShowPlanModal(true)}
+          >
+            <Sparkles className="h-4 w-4" /> Woche planen
+          </button>
+
           {/* 4. Notiz */}
           <div>
             <label className="label">Besonderheiten</label>
@@ -564,6 +573,15 @@ export function HouseholdPage() {
           </ul>
         )}
       </div>
+
+      {showPlanModal && (
+        <PlanWeekModal
+          householdId={activeHousehold.id}
+          prefs={prefs}
+          onClose={() => setShowPlanModal(false)}
+          onDone={(info) => setInfo(`${info.created} neu geplant, ${info.reused} aus der Sammlung (${formatWeekLabel(info.weekStart)}).`)}
+        />
+      )}
 
       <button className="btn btn-ghost !text-clay" onClick={() => void leave()} disabled={busy}>
         <LogOut className="h-4 w-4" /> {isOwner ? 'Haushalt löschen' : 'Haushalt verlassen'}
