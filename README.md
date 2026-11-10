@@ -241,3 +241,15 @@ Illustration** des fertigen Gerichts:
 - Auf der Rezeptseite: „Bild neu zeichnen" jederzeit per Klick; während der Erzeugung läuft ein
   Hinweis mit automatischer Aktualisierung.
 
+
+## Haushalts-Vorgaben und Küchengeräte
+
+Jeder Haushalt hat eigene Vorgaben, die für alle Mitglieder gelten: Ernährungsform, bevorzugte
+Küche, auszuschließende Allergien, **Küchengeräte**, maximale Zubereitungszeit, Kalorienziel und
+eine Freitext-Notiz. Sie steuern den KI-Wochenplan und lassen sich in der Rezeptsammlung mit einem
+Klick als Filter übernehmen („Haushalt übernehmen").
+
+Küchengeräte stehen zusätzlich im Profil (`appliances`) — die KI schlägt nur Gerichte vor, die mit
+den vorhandenen Geräten machbar sind. Auswahl: Ofen, Herd, Mikrowelle, Thermomix, Reiskocher,
+Heißluftfritteuse, Slow Cooker, Grill, Kontaktgrill, Küchenmaschine, Pürierstab, Dampfgarer.
+
