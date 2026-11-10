@@ -327,6 +327,19 @@ export function HouseholdPage() {
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       {info && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm font-medium text-leaf">{info}</p>}
 
+      <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="label !mb-0">Wochenplan</p>
+          <p className="text-xs text-ink/55">
+            Tage, Mahlzeiten, Portionen und Modus für eine Woche wählen. Was du hier einträgst, gilt nur
+            für diesen Plan — die Vorgaben darunter bleiben unverändert.
+          </p>
+        </div>
+        <button className="btn btn-primary shrink-0" onClick={() => setShowPlanModal(true)}>
+          <Sparkles className="h-4 w-4" /> Woche planen
+        </button>
+      </div>
+
       <div className="card p-4">
         <Collapsible
           title="Vorgaben für den Haushalt"
@@ -512,14 +525,6 @@ export function HouseholdPage() {
               }
             />
           </div>
-
-          {/* Wochenplan direkt hier starten */}
-          <button
-            className="btn btn-primary w-full"
-            onClick={() => setShowPlanModal(true)}
-          >
-            <Sparkles className="h-4 w-4" /> Woche planen
-          </button>
 
           {/* 4. Notiz */}
           <div>
