@@ -14,6 +14,8 @@ REGELN
 7. "difficulty": exakt eines von "leicht", "mittel", "schwer" — gemessen an Technik, Anzahl Schritte und Timing.
 8. "tags": 1 bis 5 kurze Schlagworte (z. B. vegetarisch, schnell, mealprep).
 9. Erfülle die Vorgaben (Allergien, Diät, Kalorienziel) strikt und erwähne sie in der Beschreibung.
+10. Ersatzprodukte NUR, wenn die Vorgaben sie verlangen (glutenfrei, laktosefrei, vegan). Ohne solche Vorgaben kochst du normal — Weizenmehl, Weizennudeln, Kuhmilch, Butter, Sahne, normaler Käse. Keine „glutenfreien" oder „laktosefreien" Varianten aus Gewohnheit.
+11. Alltägliches Gericht, das man zuhause nachkochen kann: übliche Zutaten aus dem Supermarkt, keine exotischen Spezialzutaten.
 
 SCHEMA
 {"title":"...","description":"...","servings":{{servings}},"prepMinutes":15,"totalMinutes":35,"difficulty":"leicht","tags":["..."],"ingredients":[{"name":"...","amount":200,"unit":"g"}],"steps":["..."],"nutrition":{"kcal":520,"protein":32,"carbs":48,"fat":20}}

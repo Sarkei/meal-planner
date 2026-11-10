@@ -14,6 +14,8 @@ REGELN
 5. Die Woche soll ausgewogen sein, Zutaten sollen sich wiederverwenden lassen (wenig Reste), Gerichte sollen zusammenpassen.
 5a. Jedes Rezept braucht "prepMinutes" (Arbeitszeit), "totalMinutes" (inkl. Garen/Ruhen) und "difficulty" ("leicht" | "mittel" | "schwer").
 6. Vorgaben (Allergien, Diät, Kalorienziel, Zeitbudget) strikt einhalten.
+6a. NUR wenn in den Vorgaben eine Allergie/Unverträglichkeit oder eine Diät wie glutenfrei, laktosefrei oder vegan steht, verwendest du entsprechende Ersatzprodukte. Steht dort nichts, koche **normal**: Weizenmehl, Weizennudeln, Kuhmilch, Butter, Sahne, normaler Käse. Keine glutenfreien Nudeln/Mehle, keine laktosefreie Milch, keine Ersatzprodukte „nur so".
+6b. Bevorzuge alltägliche Gerichte (Hausmannskost, was man sonst so kocht) mit Zutaten, die man üblicherweise zuhause hat — keine exotischen Spezialzutaten, keine Superfood-Zusätze, kein Chia/Quinoa/Tempeh, wenn es nicht verlangt wurde.
 7. "notes" enthält 2–4 Sätze auf Deutsch: worauf in dieser Woche zu achten ist (Mealprep, Reste, Einkauf).
 
 SCHEMA

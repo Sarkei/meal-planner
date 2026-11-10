@@ -257,8 +257,14 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
   const appliances = [...new Set([...settings.appliances, ...(householdPrefsForRecipe?.appliances ?? [])])];
   const dislikes = [...new Set([...settings.dislikes, ...(householdPrefsForRecipe?.dislikes ?? [])])];
   const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
+  const needsSubstitutes = [...settings.diets, ...settings.allergies].some((v) =>
+    /gluten|laktose|vegan|vegetarisch|pescetarisch|nuss|ei|soja|fisch|meeresfr|schwein|pilz|sellerie|sesam/i.test(v),
+  );
   const constraintParts = [
     (body.constraints ?? '').trim(),
+    needsSubstitutes
+      ? ''
+      : 'Keine Allergien oder Unverträglichkeiten angegeben: KEINE Ersatzprodukte (nicht glutenfrei, nicht laktosefrei, nicht vegan) — normale Zutaten wie Weizenmehl, Weizennudeln, Kuhmilch, Butter, Sahne verwenden.',
     settings.diets.length ? `Ernährungsform: ${settings.diets.join(', ')}` : '',
     settings.allergies.length ? `Unverträglichkeiten/Allergien: ${settings.allergies.join(', ')}` : '',
     settings.cuisines.length ? `Bevorzugte Küche: ${settings.cuisines.join(', ')}` : '',
@@ -408,8 +414,14 @@ export async function planWeekForUser(
   const maxMinutes = [householdPrefs?.maxMinutes, settings.maxMinutes].filter((v): v is number => v != null);
   const kcalTarget = householdPrefs?.kcalTarget ?? settings.kcalTarget;
   const wishes = [settings.specialWishes, ...(householdPrefs?.specialWishes ?? [])].filter(Boolean);
+  const needsSubstitutes = [...diets, ...allergies].some((v) =>
+    /gluten|laktose|vegan|vegetarisch|pescetarisch|nuss|ei|soja|fisch|meeresfr|schwein|pilz|sellerie|sesam/i.test(v),
+  );
   const constraintParts = [
     (body.constraints ?? '').trim(),
+    needsSubstitutes
+      ? ''
+      : 'Keine Allergien oder Unverträglichkeiten angegeben: KEINE Ersatzprodukte (nicht glutenfrei, nicht laktosefrei, nicht vegan) — normale Zutaten verwenden, alltägliche Hausmannskost.',
     diets.length ? `Ernährungsform (für ALLE Personen einhalten): ${diets.join(', ')}` : '',
     allergies.length ? `Unverträglichkeiten/Allergien (streng meiden): ${allergies.join(', ')}` : '',
     cuisines.length ? `Bevorzugte Küche: ${cuisines.join(', ')}` : '',

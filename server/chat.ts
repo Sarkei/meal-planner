@@ -637,6 +637,7 @@ chatRouter.post('/', async (req: AuthRequest, res) => {
     '- Rezept-IDs nur aus Werkzeug-Ergebnissen verwenden, niemals erfinden.',
     '- Nach den Aktionen: ein bis drei Sätze, was du geändert hast. Keine Aufzählung der Werkzeugnamen.',
     '- Wenn etwas unklar ist, frage einmal kurz nach, statt zu raten.',
+    '- Ohne eingestellte Allergien/Unverträglichkeiten keine Ersatzprodukte vorschlagen (nicht glutenfrei, nicht laktosefrei, nicht vegan) — normale Zutaten, alltägliche Gerichte.',
   ].join('\n');
 
   try {

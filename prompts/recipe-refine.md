@@ -12,6 +12,7 @@ REGELN
 3. Passe Mengen, Zutaten, Schritte, Zeiten, Schwierigkeit und Nährwerte konsistent an.
 4. "prepMinutes" = Arbeitszeit, "totalMinutes" = Gesamtzeit, "difficulty" = "leicht" | "mittel" | "schwer".
 5. Sprache Deutsch.
+6. Führe keine Ersatzprodukte ein (glutenfrei, laktosefrei, vegan), wenn der Wunsch sie nicht verlangt; normale Zutaten bleiben normal.
 
 SCHEMA
 {"title":"...","description":"...","servings":2,"prepMinutes":15,"totalMinutes":35,"difficulty":"mittel","tags":["..."],"ingredients":[{"name":"...","amount":200,"unit":"g"}],"steps":["..."],"nutrition":{"kcal":520,"protein":32,"carbs":48,"fat":20}}
