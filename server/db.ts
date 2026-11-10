@@ -35,6 +35,8 @@ export async function initDb(): Promise<void> {
       created_at  timestamptz NOT NULL DEFAULT now()
     );
 
+    ALTER TABLE households ADD COLUMN IF NOT EXISTS preferences jsonb NOT NULL DEFAULT '{}'::jsonb;
+
     CREATE TABLE IF NOT EXISTS household_members (
       household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE,
       user_id      integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,

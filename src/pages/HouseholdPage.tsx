@@ -1,11 +1,73 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Loader2, LogOut, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Loader2,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  UserPlus,
+  Users,
+  Utensils,
+} from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
-import type { HouseholdMember, Slot } from '../lib/types';
+import type { HouseholdMember, HouseholdPreferences, Slot } from '../lib/types';
+import { EMPTY_HOUSEHOLD_PREFERENCES } from '../lib/types';
+import {
+  ALLERGY_OPTIONS,
+  APPLIANCE_OPTIONS,
+  CUISINE_OPTIONS,
+  DIET_OPTIONS,
+} from '../lib/preferences';
 import { addDays, formatWeekLabel, mondayOf, toYmd } from '../lib/api';
 import { WEEKDAYS, SLOTS } from '../lib/types';
 import { Modal } from '../components/Modal';
+
+type ChipGroupProps = {
+  label: string;
+  hint?: string;
+  options: readonly string[];
+  selected: string[];
+  emptyLabel: string;
+  onToggle: (value: string) => void;
+  onClear: () => void;
+};
+
+function ChipGroup({ label, hint, options, selected, emptyLabel, onToggle, onClear }: ChipGroupProps) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      {hint && <p className="mb-2 text-xs text-ink/50">{hint}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onClear}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+            selected.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+          }`}
+        >
+          {emptyLabel}
+        </button>
+        {options.map((option) => {
+          const active = selected.includes(option);
+          return (
+            <button
+              key={option}
+              onClick={() => onToggle(option)}
+              className={`ui-mark-selected rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+              }`}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function HouseholdPage() {
   const { activeHousehold, households, refresh, selectHousehold, user } = useAuth();
@@ -18,6 +80,28 @@ export function HouseholdPage() {
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
+  const [prefs, setPrefs] = useState<HouseholdPreferences>(EMPTY_HOUSEHOLD_PREFERENCES);
+  const [prefsSaved, setPrefsSaved] = useState(false);
+
+  const savePrefs = useCallback(
+    async (change: Partial<HouseholdPreferences>) => {
+      if (!activeHousehold) return;
+      const next = { ...prefs, ...change };
+      setPrefs(next);
+      try {
+        const data = await api<{ preferences: HouseholdPreferences }>(
+          `/households/${activeHousehold.id}/preferences`,
+          { method: 'PUT', body: JSON.stringify(next) },
+        );
+        setPrefs(data.preferences);
+        setPrefsSaved(true);
+        window.setTimeout(() => setPrefsSaved(false), 1800);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.');
+      }
+    },
+    [activeHousehold, prefs],
+  );
 
   const load = useCallback(async () => {
     if (!activeHousehold) {
@@ -27,8 +111,11 @@ export function HouseholdPage() {
     }
     setLoading(true);
     try {
-      const data = await api<{ members: HouseholdMember[] }>(`/households/${activeHousehold.id}`);
+      const data = await api<{ members: HouseholdMember[]; preferences?: HouseholdPreferences }>(
+        `/households/${activeHousehold.id}`,
+      );
       setMembers(data.members);
+      setPrefs(data.preferences ?? EMPTY_HOUSEHOLD_PREFERENCES);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Haushalt konnte nicht geladen werden.');
     } finally {
@@ -236,6 +323,98 @@ export function HouseholdPage() {
 
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       {info && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm font-medium text-leaf">{info}</p>}
+
+      <div className="card space-y-5 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <Utensils className="h-4 w-4 text-leaf" />
+              <p className="label !mb-0">Vorgaben für den Haushalt</p>
+            </div>
+            <p className="text-xs text-ink/50">
+              Gilt für alle Mitglieder: Wochenplan, KI-Vorschläge und als Filter-Vorlage in der Rezeptsammlung.
+            </p>
+          </div>
+          {prefsSaved && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-leaf">
+              <Check className="h-3.5 w-3.5" /> gespeichert
+            </span>
+          )}
+        </div>
+
+        <ChipGroup
+          label="Ernährungsform"
+          options={DIET_OPTIONS}
+          selected={prefs.diets}
+          emptyLabel="Egal"
+          onClear={() => void savePrefs({ diets: [] })}
+          onToggle={(value) =>
+            void savePrefs({
+              diets: prefs.diets.includes(value)
+                ? prefs.diets.filter((d) => d !== value)
+                : [...prefs.diets, value].slice(0, 8),
+            })
+          }
+        />
+
+        <ChipGroup
+          label="Präferierte Küche"
+          options={CUISINE_OPTIONS}
+          selected={prefs.cuisines}
+          emptyLabel="Egal"
+          onClear={() => void savePrefs({ cuisines: [] })}
+          onToggle={(value) =>
+            void savePrefs({
+              cuisines: prefs.cuisines.includes(value)
+                ? prefs.cuisines.filter((c) => c !== value)
+                : [...prefs.cuisines, value].slice(0, 10),
+            })
+          }
+        />
+
+        <ChipGroup
+          label="Allergien & Abneigungen"
+          options={ALLERGY_OPTIONS}
+          selected={prefs.allergies}
+          emptyLabel="Keine Allergien"
+          onClear={() => void savePrefs({ allergies: [] })}
+          onToggle={(value) =>
+            void savePrefs({
+              allergies: prefs.allergies.includes(value)
+                ? prefs.allergies.filter((a) => a !== value)
+                : [...prefs.allergies, value].slice(0, 12),
+            })
+          }
+        />
+
+        <ChipGroup
+          label="Geräte im Haushalt"
+          hint="Die KI plant nur Rezepte, die mit diesen Küchengeräten machbar sind."
+          options={APPLIANCE_OPTIONS}
+          selected={prefs.appliances}
+          emptyLabel="Keine Angabe"
+          onClear={() => void savePrefs({ appliances: [] })}
+          onToggle={(value) =>
+            void savePrefs({
+              appliances: prefs.appliances.includes(value)
+                ? prefs.appliances.filter((a) => a !== value)
+                : [...prefs.appliances, value].slice(0, 12),
+            })
+          }
+        />
+
+        <div>
+          <label className="label">Besonderheiten</label>
+          <textarea
+            className="input min-h-[64px] resize-y"
+            placeholder="z. B. keine scharfen Gerichte für die Kinder, samstags immer Pizza"
+            value={prefs.note}
+            maxLength={400}
+            onChange={(e) => setPrefs({ ...prefs, note: e.target.value })}
+            onBlur={() => void savePrefs({ note: prefs.note })}
+          />
+        </div>
+      </div>
 
       <div className="card p-5">
         <div className="mb-3 flex items-center gap-2">

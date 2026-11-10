@@ -7,6 +7,27 @@ export type Household = {
   inviteCode: string;
   memberCount: number;
   recipeCount: number;
+  preferences?: HouseholdPreferences;
+};
+
+export type HouseholdPreferences = {
+  diets: string[];
+  cuisines: string[];
+  allergies: string[];
+  appliances: string[];
+  maxMinutes: number | null;
+  kcalTarget: number | null;
+  note: string;
+};
+
+export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
+  diets: [],
+  cuisines: [],
+  allergies: [],
+  appliances: [],
+  maxMinutes: null,
+  kcalTarget: null,
+  note: '',
 };
 
 export type HouseholdMember = {
@@ -141,6 +162,7 @@ export type UserSettings = {
   diets: string[];
   allergies: string[];
   cuisines: string[];
+  appliances: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
@@ -154,6 +176,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   diets: [],
   allergies: [],
   cuisines: [],
+  appliances: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { pool } from './db';
+import { normalizeHouseholdPreferences } from './householdPrefs';
 import { fail, generateInviteCode, type AuthRequest } from './guards';
 
 const JWT_SECRET = process.env.JWT_SECRET?.trim() || 'dev-secret-change-me';
@@ -113,6 +114,8 @@ export type UserSettings = {
   allergies: string[];
   /** Präferierte Küchen, leer = egal. */
   cuisines: string[];
+  /** Küchengeräte, die zur Verfügung stehen (Auswahl aus fester Liste). */
+  appliances: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
@@ -126,6 +129,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   diets: [],
   allergies: [],
   cuisines: [],
+  appliances: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,
@@ -153,6 +157,7 @@ export function mergeSettings(raw: unknown): UserSettings {
     diets: toStringList((value as { diets?: unknown }).diets ?? (value as { diet?: unknown }).diet, 8),
     allergies: toStringList(value.allergies, 12),
     cuisines: toStringList(value.cuisines, 10),
+    appliances: toStringList((value as { appliances?: unknown }).appliances, 12),
     maxMinutes: value.maxMinutes != null && Number.isFinite(Number(value.maxMinutes)) ? Number(value.maxMinutes) : null,
     kcalTarget: value.kcalTarget != null && Number.isFinite(Number(value.kcalTarget)) ? Number(value.kcalTarget) : null,
     aiAutoFavorite: value.aiAutoFavorite !== false,
@@ -167,10 +172,17 @@ export async function loadSettings(userId: number): Promise<UserSettings> {
 }
 
 /** Sammelt die Vorgaben aller Haushaltsmitglieder und fasst sie zusammen. */
+async function loadHouseholdPreferencesRow(householdId: string) {
+  const row = await pool.query<{ preferences: unknown }>('SELECT preferences FROM households WHERE id = $1', [householdId]);
+  if (!row.rowCount) return null;
+  return normalizeHouseholdPreferences(row.rows[0].preferences);
+}
+
 export async function loadHouseholdPreferences(householdId: string): Promise<{
   diets: string[];
   allergies: string[];
   cuisines: string[];
+  appliances: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   specialWishes: string[];
@@ -185,15 +197,38 @@ export async function loadHouseholdPreferences(householdId: string): Promise<{
       ORDER BY m.joined_at ASC`,
     [householdId],
   );
-  const merged = { diets: new Set<string>(), allergies: new Set<string>(), cuisines: new Set<string>(), wishes: [] as string[] };
+  const merged = {
+    diets: new Set<string>(),
+    allergies: new Set<string>(),
+    cuisines: new Set<string>(),
+    appliances: new Set<string>(),
+    wishes: [] as string[],
+  };
   let maxMinutes: number | null = null;
   let kcalSum = 0;
   let kcalCount = 0;
+
+  // Vorgaben des Haushalts gelten zusätzlich zu denen der Mitglieder
+  const household = await loadHouseholdPreferencesRow(householdId);
+  if (household) {
+    household.diets.forEach((d) => merged.diets.add(d));
+    household.allergies.forEach((a) => merged.allergies.add(a));
+    household.cuisines.forEach((c) => merged.cuisines.add(c));
+    household.appliances.forEach((a) => merged.appliances.add(a));
+    if (household.maxMinutes != null) maxMinutes = household.maxMinutes;
+    if (household.kcalTarget != null) {
+      kcalSum += household.kcalTarget;
+      kcalCount += 1;
+    }
+    if (household.note) merged.wishes.push(`Haushalt: ${household.note}`);
+  }
+
   for (const row of rows.rows) {
     const s = mergeSettings(row.data);
     s.diets.forEach((d) => merged.diets.add(d));
     s.allergies.forEach((a) => merged.allergies.add(a));
     s.cuisines.forEach((c) => merged.cuisines.add(c));
+    (s.appliances ?? []).forEach((a) => merged.appliances.add(a));
     if (s.specialWishes) merged.wishes.push(`${row.display_name}: ${s.specialWishes}`);
     if (s.maxMinutes != null) maxMinutes = maxMinutes == null ? s.maxMinutes : Math.min(maxMinutes, s.maxMinutes);
     if (s.kcalTarget != null) {
@@ -205,6 +240,7 @@ export async function loadHouseholdPreferences(householdId: string): Promise<{
     diets: [...merged.diets],
     allergies: [...merged.allergies],
     cuisines: [...merged.cuisines],
+    appliances: [...merged.appliances],
     maxMinutes,
     kcalTarget: kcalCount ? Math.round(kcalSum / kcalCount) : null,
     specialWishes: merged.wishes,

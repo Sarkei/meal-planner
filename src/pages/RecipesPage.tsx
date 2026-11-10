@@ -10,6 +10,7 @@ import {
   Sparkles,
   Star,
   UserRound,
+  Users,
   X,
 } from 'lucide-react';
 import { ALLERGY_OPTIONS, CUISINE_OPTIONS, DIET_OPTIONS, KCAL_OPTIONS, TIME_OPTIONS } from '../lib/preferences';
@@ -21,6 +22,7 @@ import { Modal } from '../components/Modal';
 import {
   buildRecipeQuery,
   type Facets,
+  type HouseholdPreferences,
   type Recipe,
   type RecipeQuery,
   type UserSettings,
@@ -59,6 +61,26 @@ export function RecipesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [householdPrefs, setHouseholdPrefs] = useState<HouseholdPreferences | null>(null);
+
+  // Haushalts-Vorgaben als Filter-Vorlage laden
+  useEffect(() => {
+    if (!activeHousehold) {
+      setHouseholdPrefs(null);
+      return;
+    }
+    api<{ preferences: HouseholdPreferences }>(`/households/${activeHousehold.id}/preferences`)
+      .then((data) => setHouseholdPrefs(data.preferences))
+      .catch(() => setHouseholdPrefs(null));
+  }, [activeHousehold?.id]);
+
+  const applyHouseholdPrefs = () => {
+    if (!householdPrefs) return;
+    setDiets(householdPrefs.diets);
+    setCuisines(householdPrefs.cuisines);
+    setExcludedAllergens(householdPrefs.allergies);
+    setMaxMinutes(householdPrefs.maxMinutes ?? '');
+  };
 
   const activeFilters = useMemo(
     () =>
@@ -419,6 +441,19 @@ export function RecipesPage() {
               </div>
             </div>
           )}
+          {householdPrefs &&
+            (householdPrefs.diets.length > 0 ||
+              householdPrefs.cuisines.length > 0 ||
+              householdPrefs.allergies.length > 0 ||
+              householdPrefs.maxMinutes != null) && (
+              <button
+                className="btn btn-ghost !px-2 !py-1 text-[11px]"
+                onClick={applyHouseholdPrefs}
+                title="Ernährungsform, Küche, Allergien und Zeitvorgabe des Haushalts übernehmen"
+              >
+                <Users className="h-3.5 w-3.5" /> Haushalt übernehmen
+              </button>
+            )}
           {activeFilters > 0 && (
             <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={resetFilters}>
               <X className="h-3 w-3" /> Filter zurücksetzen

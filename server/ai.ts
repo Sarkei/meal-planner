@@ -252,12 +252,16 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
     return;
   }
   const settings = await loadSettings(req.userId!);
+  // Geräte des Haushalts (falls angegeben) ergänzen die eigenen
+  const householdAppliances = body.householdId ? (await loadHouseholdPreferences(body.householdId)).appliances : [];
+  const appliances = [...new Set([...settings.appliances, ...householdAppliances])];
   const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
   const constraintParts = [
     (body.constraints ?? '').trim(),
     settings.diets.length ? `Ernährungsform: ${settings.diets.join(', ')}` : '',
     settings.allergies.length ? `Unverträglichkeiten/Allergien: ${settings.allergies.join(', ')}` : '',
     settings.cuisines.length ? `Bevorzugte Küche: ${settings.cuisines.join(', ')}` : '',
+    appliances.length ? `Nur mit diesen Küchengeräten zubereitbar: ${appliances.join(', ')}` : '',
     settings.maxMinutes ? `maximal ${settings.maxMinutes} Minuten Zubereitungszeit` : '',
     settings.kcalTarget ? `grob ${settings.kcalTarget} kcal pro Portion` : '',
     settings.specialWishes ? `Sonderwünsche: ${settings.specialWishes}` : '',
@@ -383,6 +387,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
   const diets = [...new Set([...(householdPrefs?.diets ?? []), ...settings.diets])];
   const allergies = [...new Set([...(householdPrefs?.allergies ?? []), ...settings.allergies])];
   const cuisines = [...new Set([...(householdPrefs?.cuisines ?? []), ...settings.cuisines])];
+  const appliances = [...new Set([...(householdPrefs?.appliances ?? []), ...settings.appliances])];
   const maxMinutes = [householdPrefs?.maxMinutes, settings.maxMinutes].filter((v): v is number => v != null);
   const kcalTarget = householdPrefs?.kcalTarget ?? settings.kcalTarget;
   const wishes = [settings.specialWishes, ...(householdPrefs?.specialWishes ?? [])].filter(Boolean);
@@ -391,6 +396,9 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
     diets.length ? `Ernährungsform (für ALLE Personen einhalten): ${diets.join(', ')}` : '',
     allergies.length ? `Unverträglichkeiten/Allergien (streng meiden): ${allergies.join(', ')}` : '',
     cuisines.length ? `Bevorzugte Küche: ${cuisines.join(', ')}` : '',
+    appliances.length
+      ? `Nur mit diesen Küchengeräten zubereiten (keine anderen voraussetzen): ${appliances.join(', ')}`
+      : '',
     maxMinutes.length ? `jede Mahlzeit in maximal ${Math.min(...maxMinutes)} Minuten` : '',
     kcalTarget ? `Tagesziel etwa ${kcalTarget} kcal` : '',
     wishes.length ? `Sonderwünsche: ${wishes.join(' | ')}` : '',

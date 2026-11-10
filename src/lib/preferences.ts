@@ -27,6 +27,22 @@ export const CUISINE_OPTIONS = [
   'Orientalisch',
 ] as const;
 
+/** Küchengeräte: was zuhause benutzt werden kann. */
+export const APPLIANCE_OPTIONS = [
+  'Ofen',
+  'Herd',
+  'Mikrowelle',
+  'Thermomix',
+  'Reiskocher',
+  'Heißluftfritteuse',
+  'Slow Cooker',
+  'Grill',
+  'Kontaktgrill',
+  'Küchenmaschine',
+  'Pürierstab',
+  'Dampfgarer',
+] as const;
+
 export const ALLERGY_OPTIONS = [
   'Nüsse',
   'Erdnüsse',

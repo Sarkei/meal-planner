@@ -16,6 +16,7 @@ import { useAuth } from '../lib/auth';
 import { api, setToken } from '../lib/api';
 import {
   ALLERGY_OPTIONS as ALLERGY_OPTIONS_BASE,
+  APPLIANCE_OPTIONS as APPLIANCE_OPTIONS_BASE,
   CUISINE_OPTIONS as CUISINE_OPTIONS_BASE,
   DIET_OPTIONS as DIET_OPTIONS_BASE,
 } from '../lib/preferences';
@@ -23,6 +24,7 @@ import { SLOTS, type Slot, type UserSettings } from '../lib/types';
 
 type Option = { value: string; label: string };
 
+const APPLIANCE_OPTIONS = [...APPLIANCE_OPTIONS_BASE];
 const DIET_OPTIONS = [...DIET_OPTIONS_BASE];
 const CUISINE_OPTIONS = [...CUISINE_OPTIONS_BASE];
 const ALLERGY_OPTIONS = [...ALLERGY_OPTIONS_BASE];
@@ -309,6 +311,37 @@ export function SettingsPage() {
               })
             }
           />
+
+          <div>
+            <label className="label">Küchengeräte, die ich benutzen kann</label>
+            <p className="mb-2 text-xs text-ink/50">
+              Die KI schlägt nur Rezepte vor, die mit diesen Geräten machbar sind.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {APPLIANCE_OPTIONS.map((option) => {
+                const active = settings.appliances.includes(option);
+                return (
+                  <button
+                    key={option}
+                    onClick={() =>
+                      void saveSettings({
+                        appliances: active
+                          ? settings.appliances.filter((a) => a !== option)
+                          : [...settings.appliances, option].slice(0, 12),
+                      })
+                    }
+                    className={`ui-mark-selected rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      active
+                        ? 'border-leaf bg-leaf text-white'
+                        : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div>
             <label className="label">Allergien & Abneigungen (Mehrfachauswahl)</label>

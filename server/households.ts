@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { pool } from './db';
+import { loadHouseholdPreferences, normalizeHouseholdPreferences } from './householdPrefs';
 import { createHouseholdWithOwner } from './auth';
 import { fail, generateInviteCode, membershipRole, requireHousehold, type AuthRequest } from './guards';
+import { pool } from './db';
 
 export const householdsRouter = Router();
 
@@ -80,8 +81,8 @@ householdsRouter.get('/:id', async (req: AuthRequest, res) => {
     fail(res, access.status, access.error, access.message);
     return;
   }
-  const household = await pool.query<{ id: string; name: string; invite_code: string; created_at: string }>(
-    'SELECT id, name, invite_code, created_at FROM households WHERE id = $1',
+  const household = await pool.query<{ id: string; name: string; invite_code: string; created_at: string; preferences: unknown }>(
+    'SELECT id, name, invite_code, created_at, preferences FROM households WHERE id = $1',
     [req.params.id],
   );
   if (!household.rowCount) {
@@ -110,7 +111,32 @@ householdsRouter.get('/:id', async (req: AuthRequest, res) => {
       role: m.role,
       joinedAt: m.joined_at,
     })),
+    preferences: normalizeHouseholdPreferences(household.rows[0].preferences),
   });
+});
+
+/** Haushalts-Vorgaben: gelten für alle Mitglieder (Filter-Vorlage und KI-Planung). */
+householdsRouter.put('/:id/preferences', async (req: AuthRequest, res) => {
+  const access = await requireHousehold(req.params.id, req.userId!);
+  if (!access.ok) {
+    fail(res, access.status, access.error, access.message);
+    return;
+  }
+  const prefs = normalizeHouseholdPreferences(req.body);
+  await pool.query('UPDATE households SET preferences = $2::jsonb WHERE id = $1', [
+    req.params.id,
+    JSON.stringify(prefs),
+  ]);
+  res.json({ preferences: prefs });
+});
+
+householdsRouter.get('/:id/preferences', async (req: AuthRequest, res) => {
+  const access = await requireHousehold(req.params.id, req.userId!);
+  if (!access.ok) {
+    fail(res, access.status, access.error, access.message);
+    return;
+  }
+  res.json({ preferences: await loadHouseholdPreferences(req.params.id) });
 });
 
 householdsRouter.patch('/:id', async (req: AuthRequest, res) => {
