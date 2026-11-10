@@ -25,6 +25,7 @@ import {
 import { addDays, formatWeekLabel, mondayOf, toYmd } from '../lib/api';
 import { WEEKDAYS, SLOTS } from '../lib/types';
 import { Modal } from '../components/Modal';
+import { TagListInput } from '../components/TagListInput';
 
 type ChipGroupProps = {
   label: string;
@@ -402,6 +403,18 @@ export function HouseholdPage() {
             })
           }
         />
+
+        <div>
+          <label className="label">Lebensmittel, die niemand mag</label>
+          <p className="mb-2 text-xs text-ink/50">
+            Gilt für alle Mitglieder — die KI meidet sie bei Rezepten und Wochenplänen.
+          </p>
+          <TagListInput
+            value={prefs.dislikes}
+            onChange={(dislikes) => void savePrefs({ dislikes })}
+            placeholder="z. B. Rosenkohl, Leber"
+          />
+        </div>
 
         <div>
           <label className="label">Besonderheiten</label>

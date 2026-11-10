@@ -253,8 +253,9 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
   }
   const settings = await loadSettings(req.userId!);
   // Geräte des Haushalts (falls angegeben) ergänzen die eigenen
-  const householdAppliances = body.householdId ? (await loadHouseholdPreferences(body.householdId)).appliances : [];
-  const appliances = [...new Set([...settings.appliances, ...householdAppliances])];
+  const householdPrefsForRecipe = body.householdId ? await loadHouseholdPreferences(body.householdId) : null;
+  const appliances = [...new Set([...settings.appliances, ...(householdPrefsForRecipe?.appliances ?? [])])];
+  const dislikes = [...new Set([...settings.dislikes, ...(householdPrefsForRecipe?.dislikes ?? [])])];
   const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
   const constraintParts = [
     (body.constraints ?? '').trim(),
@@ -262,6 +263,7 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
     settings.allergies.length ? `Unverträglichkeiten/Allergien: ${settings.allergies.join(', ')}` : '',
     settings.cuisines.length ? `Bevorzugte Küche: ${settings.cuisines.join(', ')}` : '',
     appliances.length ? `Nur mit diesen Küchengeräten zubereitbar: ${appliances.join(', ')}` : '',
+    dislikes.length ? `Diese Lebensmittel werden nicht gemocht, nicht verwenden: ${dislikes.join(', ')}` : '',
     settings.maxMinutes ? `maximal ${settings.maxMinutes} Minuten Zubereitungszeit` : '',
     settings.kcalTarget ? `grob ${settings.kcalTarget} kcal pro Portion` : '',
     settings.specialWishes ? `Sonderwünsche: ${settings.specialWishes}` : '',
@@ -352,29 +354,43 @@ aiRouter.post('/recipe/refine', async (req: AuthRequest, res) => {
 
 const WEEK_DAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
-aiRouter.post('/week', async (req: AuthRequest, res) => {
-  const started = Date.now();
-  const body = req.body as {
-    householdId?: string;
-    weekStart?: string;
-    servings?: number;
-    slots?: string[];
-    days?: number[];
-    constraints?: string;
-    mode?: 'replace' | 'fill';
-    mergeMembers?: boolean;
-  };
-  const access = await requireHousehold(body.householdId, req.userId!);
-  if (!access.ok) {
-    fail(res, access.status, access.error, access.message);
-    return;
+export type WeekPlanBody = {
+  householdId?: string;
+  weekStart?: string;
+  servings?: number;
+  slots?: string[];
+  days?: number[];
+  constraints?: string;
+  mode?: 'replace' | 'fill';
+  mergeMembers?: boolean;
+};
+
+export class WeekPlanError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+  ) {
+    super(message);
   }
+}
+
+/**
+ * Wochenplan erzeugen — gemeinsame Logik für den Dialog und den Chat-Assistenten.
+ * Wirft WeekPlanError bei ungültigen Eingaben, damit beide Aufrufer passend antworten können.
+ */
+export async function planWeekForUser(
+  userId: number,
+  body: WeekPlanBody,
+): Promise<{ plan: unknown; created: number; notes: string; days: string[] }> {
+  const started = Date.now();
+  const access = await requireHousehold(body.householdId, userId);
+  if (!access.ok) throw new WeekPlanError(access.status, access.error, access.message);
   const weekStart = String(body.weekStart ?? '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
-    fail(res, 400, 'invalid-input', 'Wochenstart (YYYY-MM-DD) fehlt.');
-    return;
+    throw new WeekPlanError(400, 'invalid-input', 'Wochenstart (YYYY-MM-DD) fehlt.');
   }
-  const settings = await loadSettings(req.userId!);
+  const settings = await loadSettings(userId);
   const householdPrefs = body.mergeMembers ? await loadHouseholdPreferences(body.householdId!) : null;
   const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
   const requestedSlots = (body.slots ?? settings.defaultSlots ?? ['abend']).filter(
@@ -388,6 +404,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
   const allergies = [...new Set([...(householdPrefs?.allergies ?? []), ...settings.allergies])];
   const cuisines = [...new Set([...(householdPrefs?.cuisines ?? []), ...settings.cuisines])];
   const appliances = [...new Set([...(householdPrefs?.appliances ?? []), ...settings.appliances])];
+  const dislikes = [...new Set([...(householdPrefs?.dislikes ?? []), ...settings.dislikes])];
   const maxMinutes = [householdPrefs?.maxMinutes, settings.maxMinutes].filter((v): v is number => v != null);
   const kcalTarget = householdPrefs?.kcalTarget ?? settings.kcalTarget;
   const wishes = [settings.specialWishes, ...(householdPrefs?.specialWishes ?? [])].filter(Boolean);
@@ -399,6 +416,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
     appliances.length
       ? `Nur mit diesen Küchengeräten zubereiten (keine anderen voraussetzen): ${appliances.join(', ')}`
       : '',
+    dislikes.length ? `Diese Lebensmittel werden nicht gemocht, nicht verwenden: ${dislikes.join(', ')}` : '',
     maxMinutes.length ? `jede Mahlzeit in maximal ${Math.min(...maxMinutes)} Minuten` : '',
     kcalTarget ? `Tagesziel etwa ${kcalTarget} kcal` : '',
     wishes.length ? `Sonderwünsche: ${wishes.join(' | ')}` : '',
@@ -436,7 +454,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
       `INSERT INTO meal_plans (household_id, week_start, created_by) VALUES ($1,$2,$3)
        ON CONFLICT (household_id, week_start) DO UPDATE SET household_id = EXCLUDED.household_id
        RETURNING id`,
-      [body.householdId, weekStart, req.userId],
+      [body.householdId, weekStart, userId],
     );
     const planId = planRow.rows[0].id;
     let created = 0;
@@ -454,7 +472,7 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
            RETURNING id`,
           [
             body.householdId,
-            req.userId,
+            userId,
             recipe.title,
             recipe.description,
             recipe.servings,
@@ -477,11 +495,28 @@ aiRouter.post('/week', async (req: AuthRequest, res) => {
         created += 1;
       }
     }
-    await logRun(req.userId!, 'week-plan', true, started);
+    await logRun(userId, 'week-plan', true, started);
     broadcast(body.householdId!, 'plan');
-    res.json({ plan: await loadPlan(body.householdId!, weekStart), created, notes: plan.notes, days: WEEK_DAYS });
+    return {
+      plan: await loadPlan(body.householdId!, weekStart),
+      created,
+      notes: plan.notes ?? '',
+      days: [...WEEK_DAYS],
+    };
   } catch (e) {
-    await logRun(req.userId!, 'week-plan', false, started, e instanceof Error ? e.message : String(e));
-    fail(res, 502, 'ai-failed', e instanceof Error ? e.message : 'KI-Antwort fehlgeschlagen.');
+    await logRun(userId, 'week-plan', false, started, e instanceof Error ? e.message : String(e));
+    throw new WeekPlanError(502, 'ai-failed', e instanceof Error ? e.message : 'KI-Antwort fehlgeschlagen.');
+  }
+}
+
+aiRouter.post('/week', async (req: AuthRequest, res) => {
+  try {
+    res.json(await planWeekForUser(req.userId!, req.body as WeekPlanBody));
+  } catch (e) {
+    if (e instanceof WeekPlanError) {
+      fail(res, e.status, e.code, e.message);
+      return;
+    }
+    fail(res, 500, 'internal', 'Die Woche konnte nicht geplant werden.');
   }
 });

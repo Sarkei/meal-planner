@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { initDb, pool } from './db';
 import { backfillRecipeMeta } from './recipeMeta';
 import { startImageWorker } from './images';
+import { chatRouter } from './chat';
 import { attachUserFromToken, authRouter } from './auth';
 import { requireAuth } from './guards';
 import { householdsRouter } from './households';
@@ -47,6 +48,7 @@ app.use('/api/households', requireAuth, householdsRouter);
 app.use('/api/recipes', requireAuth, recipesRouter);
 app.use('/api/plans', requireAuth, plansRouter);
 app.use('/api/ai', requireAuth, aiRouter);
+app.use('/api/chat', requireAuth, chatRouter);
 app.use('/api/shopping', requireAuth, shoppingRouter);
 
 app.use('/api', (_req, res) => {

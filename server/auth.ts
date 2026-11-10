@@ -116,6 +116,8 @@ export type UserSettings = {
   cuisines: string[];
   /** Küchengeräte, die zur Verfügung stehen (Auswahl aus fester Liste). */
   appliances: string[];
+  /** Lebensmittel, die nicht gemocht werden — freie Liste, KI meidet sie. */
+  dislikes: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
@@ -130,6 +132,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   allergies: [],
   cuisines: [],
   appliances: [],
+  dislikes: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,
@@ -158,6 +161,7 @@ export function mergeSettings(raw: unknown): UserSettings {
     allergies: toStringList(value.allergies, 12),
     cuisines: toStringList(value.cuisines, 10),
     appliances: toStringList((value as { appliances?: unknown }).appliances, 12),
+    dislikes: toStringList((value as { dislikes?: unknown }).dislikes, 40),
     maxMinutes: value.maxMinutes != null && Number.isFinite(Number(value.maxMinutes)) ? Number(value.maxMinutes) : null,
     kcalTarget: value.kcalTarget != null && Number.isFinite(Number(value.kcalTarget)) ? Number(value.kcalTarget) : null,
     aiAutoFavorite: value.aiAutoFavorite !== false,
@@ -183,6 +187,7 @@ export async function loadHouseholdPreferences(householdId: string): Promise<{
   allergies: string[];
   cuisines: string[];
   appliances: string[];
+  dislikes: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   specialWishes: string[];
@@ -202,6 +207,7 @@ export async function loadHouseholdPreferences(householdId: string): Promise<{
     allergies: new Set<string>(),
     cuisines: new Set<string>(),
     appliances: new Set<string>(),
+    dislikes: new Set<string>(),
     wishes: [] as string[],
   };
   let maxMinutes: number | null = null;
@@ -215,6 +221,7 @@ export async function loadHouseholdPreferences(householdId: string): Promise<{
     household.allergies.forEach((a) => merged.allergies.add(a));
     household.cuisines.forEach((c) => merged.cuisines.add(c));
     household.appliances.forEach((a) => merged.appliances.add(a));
+    household.dislikes.forEach((d) => merged.dislikes.add(d));
     if (household.maxMinutes != null) maxMinutes = household.maxMinutes;
     if (household.kcalTarget != null) {
       kcalSum += household.kcalTarget;
@@ -229,6 +236,7 @@ export async function loadHouseholdPreferences(householdId: string): Promise<{
     s.allergies.forEach((a) => merged.allergies.add(a));
     s.cuisines.forEach((c) => merged.cuisines.add(c));
     (s.appliances ?? []).forEach((a) => merged.appliances.add(a));
+    (s.dislikes ?? []).forEach((d) => merged.dislikes.add(d));
     if (s.specialWishes) merged.wishes.push(`${row.display_name}: ${s.specialWishes}`);
     if (s.maxMinutes != null) maxMinutes = maxMinutes == null ? s.maxMinutes : Math.min(maxMinutes, s.maxMinutes);
     if (s.kcalTarget != null) {
@@ -241,6 +249,7 @@ export async function loadHouseholdPreferences(householdId: string): Promise<{
     allergies: [...merged.allergies],
     cuisines: [...merged.cuisines],
     appliances: [...merged.appliances],
+    dislikes: [...merged.dislikes],
     maxMinutes,
     kcalTarget: kcalCount ? Math.round(kcalSum / kcalCount) : null,
     specialWishes: merged.wishes,

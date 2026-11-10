@@ -21,6 +21,7 @@ import {
   DIET_OPTIONS as DIET_OPTIONS_BASE,
 } from '../lib/preferences';
 import { SLOTS, type Slot, type UserSettings } from '../lib/types';
+import { TagListInput } from '../components/TagListInput';
 
 type Option = { value: string; label: string };
 
@@ -341,6 +342,18 @@ export function SettingsPage() {
                 );
               })}
             </div>
+          </div>
+
+          <div>
+            <label className="label">Diese Lebensmittel mag ich nicht</label>
+            <p className="mb-2 text-xs text-ink/50">
+              Die KI meidet sie in Rezepten und Wochenplänen. Einzeln eintragen, Enter hängt an.
+            </p>
+            <TagListInput
+              value={settings.dislikes}
+              onChange={(dislikes) => void saveSettings({ dislikes })}
+              placeholder="z. B. Rosenkohl, Leber, Koriander"
+            />
           </div>
 
           <div>

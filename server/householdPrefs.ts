@@ -61,6 +61,8 @@ export interface HouseholdPreferences {
   cuisines: string[];
   allergies: string[];
   appliances: string[];
+  /** Lebensmittel, die im Haushalt niemand mag — freie Liste. */
+  dislikes: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   note: string;
@@ -71,6 +73,7 @@ export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
   cuisines: [],
   allergies: [],
   appliances: [],
+  dislikes: [],
   maxMinutes: null,
   kcalTarget: null,
   note: '',
@@ -99,6 +102,8 @@ export function normalizeHouseholdPreferences(raw: unknown): HouseholdPreference
     allergies: list(value.allergies, 12, ALLERGY_OPTIONS),
     // Geräte nur aus der festen Liste — Tippfehler sollen den KI-Prompt nicht verfälschen
     appliances: list(value.appliances, 12, APPLIANCE_OPTIONS),
+    // Freie Liste: hier sind neue Lebensmittel ausdrücklich erlaubt
+    dislikes: list(value.dislikes, 40),
     maxMinutes: numberOrNull(value.maxMinutes, 5, 240),
     kcalTarget: numberOrNull(value.kcalTarget, 200, 2000),
     note: String(value.note ?? '').slice(0, 400),

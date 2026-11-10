@@ -15,6 +15,7 @@ export type HouseholdPreferences = {
   cuisines: string[];
   allergies: string[];
   appliances: string[];
+  dislikes: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   note: string;
@@ -25,6 +26,7 @@ export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
   cuisines: [],
   allergies: [],
   appliances: [],
+  dislikes: [],
   maxMinutes: null,
   kcalTarget: null,
   note: '',
@@ -163,6 +165,8 @@ export type UserSettings = {
   allergies: string[];
   cuisines: string[];
   appliances: string[];
+  /** Lebensmittel, die nicht gemocht werden (freie Liste). */
+  dislikes: string[];
   maxMinutes: number | null;
   kcalTarget: number | null;
   aiAutoFavorite: boolean;
@@ -177,6 +181,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   allergies: [],
   cuisines: [],
   appliances: [],
+  dislikes: [],
   maxMinutes: null,
   kcalTarget: null,
   aiAutoFavorite: true,

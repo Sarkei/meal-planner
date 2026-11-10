@@ -69,6 +69,16 @@ export async function initDb(): Promise<void> {
     CREATE INDEX IF NOT EXISTS recipes_cuisines_idx ON recipes USING gin (cuisines);
     CREATE INDEX IF NOT EXISTS recipes_allergens_idx ON recipes USING gin (allergens);
 
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id           bigserial PRIMARY KEY,
+      user_id      integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role         text NOT NULL,
+      content      text NOT NULL,
+      actions      jsonb NOT NULL DEFAULT '[]'::jsonb,
+      created_at   timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS chat_messages_user_idx ON chat_messages (user_id, id DESC);
+
     CREATE TABLE IF NOT EXISTS image_jobs (
       id           serial PRIMARY KEY,
       recipe_id    uuid NOT NULL UNIQUE REFERENCES recipes(id) ON DELETE CASCADE,

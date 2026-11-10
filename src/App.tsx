@@ -7,8 +7,9 @@ import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { HouseholdPage } from './pages/HouseholdPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ShoppingPage } from './pages/ShoppingPage';
+import { ChatPage } from './pages/ChatPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { CalendarDays, BookOpen, Users, Settings, CookingPot, ShoppingBasket } from 'lucide-react';
+import { CalendarDays, BookOpen, Users, Settings, CookingPot, ShoppingBasket, Sparkles } from 'lucide-react';
 
 export type Route = { name: string; id?: string; params: URLSearchParams };
 
@@ -35,6 +36,7 @@ function useRoute(): Route {
 
 const NAV = [
   { id: 'week', label: 'Woche', icon: CalendarDays },
+  { id: 'chat', label: 'Assistent', icon: Sparkles },
   { id: 'recipes', label: 'Rezepte', icon: BookOpen },
   { id: 'shopping', label: 'Einkauf', icon: ShoppingBasket },
   { id: 'household', label: 'Haushalt', icon: Users },
@@ -64,6 +66,8 @@ export function App() {
 
   const page = (() => {
     switch (route.name) {
+      case 'chat':
+        return <ChatPage />;
       case 'recipes':
         return <RecipesPage />;
       case 'shopping':
