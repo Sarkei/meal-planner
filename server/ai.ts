@@ -493,11 +493,12 @@ export async function planWeekForUser(
     const plan = await generateValidated(prompt, weekPlanSchema, 3, 240_000, 0.9);
 
     if (body.mode !== 'fill') {
-      // Ersetzen: bestehende KI-Einträge der Woche entfernen, manuelle bleiben unangetastet.
+      // Ersetzen heißt: die ganze Woche wird neu geschrieben. Auch Einträge, die auf vorhandene
+      // Rezepte aus der Sammlung zeigen, werden entfernt — sonst wächst der Plan bei jedem Lauf
+      // und „überschreiben" wirkt, als würde nichts passieren.
       await pool.query(
-        `DELETE FROM plan_entries e USING meal_plans p, recipes r
-          WHERE e.plan_id = p.id AND p.household_id = $1 AND p.week_start = $2
-            AND e.recipe_id = r.id AND r.source = 'ai'`,
+        `DELETE FROM plan_entries e USING meal_plans p
+          WHERE e.plan_id = p.id AND p.household_id = $1 AND p.week_start = $2`,
         [body.householdId, weekStart],
       );
     }
