@@ -87,6 +87,21 @@ export function WeekPage() {
     );
   }
 
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const clearWeek = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setPlan(await api<WeekPlan>(`/plans/${activeHousehold.id}/${weekStart}`, { method: 'DELETE' }));
+      setConfirmClear(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Die Woche konnte nicht geleert werden.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeEntry = async (entry: PlanEntry) => {
     setBusy(true);
     try {
@@ -179,6 +194,15 @@ export function WeekPage() {
           <button className="btn btn-ghost" onClick={() => window.location.assign('#/shopping')}>
             <ClipboardList className="h-4 w-4" /> Einkaufsliste
           </button>
+          {plan && plan.entries.length > 0 && (
+            <button
+              className="btn btn-ghost text-clay"
+              onClick={() => setConfirmClear(true)}
+              title="Alle Einträge dieser Woche entfernen"
+            >
+              <Trash2 className="h-4 w-4" /> Woche leeren
+            </button>
+          )}
           <button className="btn btn-primary" onClick={() => setShowAi(true)}>
             <Sparkles className="h-4 w-4" /> KI plant die Woche
           </button>
@@ -186,6 +210,21 @@ export function WeekPage() {
       </div>
 
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {confirmClear && (
+        <div className="card flex flex-col gap-3 border-red-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-medium text-ink/70">
+            Alle {plan?.entries.length ?? 0} Einträge dieser Woche entfernen? Die Rezepte bleiben in der Sammlung.
+          </p>
+          <div className="flex gap-2">
+            <button className="btn btn-ghost" onClick={() => setConfirmClear(false)} disabled={busy}>
+              Abbrechen
+            </button>
+            <button className="btn bg-clay text-white hover:bg-clay/90" onClick={() => void clearWeek()} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Woche leeren
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="card flex items-center justify-center gap-2 p-10 text-sm text-ink/50">
@@ -332,12 +371,14 @@ export function WeekPage() {
                             </div>
 
                             <button
-                              className="rounded-lg p-1.5 text-ink/30 transition hover:bg-red-50 hover:text-clay"
+                              className="flex items-center gap-1 rounded-lg border border-ink/10 px-2 py-1.5 text-ink/55 transition hover:border-red-200 hover:bg-red-50 hover:text-clay disabled:opacity-40"
                               onClick={() => void removeEntry(entry)}
                               disabled={busy}
                               aria-label="Aus dem Tag entfernen"
+                              title="Aus dem Tag entfernen"
                             >
                               <Trash2 className="h-4 w-4" />
+                              <span className="text-[11px] font-semibold">Entfernen</span>
                             </button>
                           </div>
                         </li>
@@ -374,7 +415,11 @@ export function WeekPage() {
           householdId={activeHousehold.id}
           weekStart={weekStart}
           onClose={() => setShowAi(false)}
-          onDone={(next) => setPlan(next)}
+          onDone={(next) => {
+            setPlan(next);
+            // Dialog schließen, damit die neue Woche direkt bearbeitet (und gelöscht) werden kann
+            setShowAi(false);
+          }}
         />
       )}
 

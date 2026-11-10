@@ -208,6 +208,25 @@ plansRouter.put('/:householdId/:weekStart/reorder', async (req: AuthRequest, res
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
+/**
+ * Ganze Woche leeren: entfernt alle Einträge (auch die von der KI erzeugten).
+ * Die Woche selbst bleibt bestehen, damit Einkaufsliste und Plan-Zuordnung stabil bleiben.
+ */
+plansRouter.delete('/:householdId/:weekStart', async (req: AuthRequest, res) => {
+  const access = await requireHousehold(req.params.householdId, req.userId!);
+  if (!access.ok) {
+    fail(res, access.status, access.error, access.message);
+    return;
+  }
+  const removed = await pool.query(
+    `DELETE FROM plan_entries e USING meal_plans p
+      WHERE e.plan_id = p.id AND p.household_id = $1 AND p.week_start = $2`,
+    [req.params.householdId, req.params.weekStart],
+  );
+  broadcast(req.params.householdId, 'plan');
+  res.json({ ...(await loadPlan(req.params.householdId, req.params.weekStart)), removed: removed.rowCount ?? 0 });
+});
+
 plansRouter.delete('/:householdId/:weekStart/entry/:entryId', async (req: AuthRequest, res) => {
   const access = await requireHousehold(req.params.householdId, req.userId!);
   if (!access.ok) {
