@@ -275,3 +275,12 @@ Eine freie Liste im Profil **und** im Haushalt („Lebensmittel, die niemand mag
 Enter, Chip mit X entfernen. Die KI erhält die Zeile „Diese Lebensmittel werden nicht gemocht,
 nicht verwenden" in Rezept- und Wochenplan-Prompts — und der Chat kann die Liste lesen und pflegen.
 
+
+## Ersatzprodukte nur bei Bedarf
+
+Ohne eingestellte Allergie oder Unverträglichkeit kocht die KI **normal**: Weizenmehl, Weizennudeln,
+Kuhmilch, Butter, Sahne, üblicher Käse — keine glutenfreien, laktosefreien oder veganen
+Ersatzprodukte „nur so". Ebenso bleiben Gerichte alltäglich (Hausmannskost statt Spezialzutaten).
+Sobald eine Allergie oder eine Diät wie glutenfrei/laktosefrei/vegan gesetzt ist, greift sie wieder
+voll — im Profil und in den Haushalts-Vorgaben.
+
