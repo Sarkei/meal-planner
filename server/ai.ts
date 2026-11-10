@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from './db';
-import { enqueueImageJob } from './images';
 import { fail, requireHousehold, type AuthRequest } from './guards';
 import {
   aiRecipeSchema,
@@ -16,8 +15,10 @@ import {
 } from './recipeSchema';
 import { loadPlan } from './plans';
 import { loadHouseholdPreferences, loadSettings } from './auth';
+import { loadHouseholdPreferences as loadHouseholdRaw } from './householdPrefs';
 import { broadcast } from './events';
 import { resolveHousehold } from './recipes';
+import { prebuildNextWeek } from './scheduler';
 
 type Provider = 'deepseek' | 'mistral' | 'gemini';
 
@@ -330,7 +331,6 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
       ],
     );
     const recipeId = created.rows[0].id;
-    void enqueueImageJob(recipeId).catch(() => undefined);
     const makeFavorite = body.favorite === true || mode === 'favorite' || settings.aiAutoFavorite;
     if (makeFavorite) {
       await pool.query('INSERT INTO favorites (user_id, recipe_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [
@@ -408,7 +408,7 @@ export class WeekPlanError extends Error {
 export async function planWeekForUser(
   userId: number,
   body: WeekPlanBody,
-): Promise<{ plan: unknown; created: number; notes: string; days: string[] }> {
+): Promise<{ plan: unknown; created: number; reused: number; notes: string; days: string[] }> {
   const started = Date.now();
   const access = await requireHousehold(body.householdId, userId);
   if (!access.ok) throw new WeekPlanError(access.status, access.error, access.message);
@@ -418,14 +418,21 @@ export async function planWeekForUser(
   }
   const settings = await loadSettings(userId);
   const householdPrefs = body.mergeMembers ? await loadHouseholdPreferences(body.householdId!) : null;
-  const servings = Math.min(12, Math.max(1, Math.round(body.servings ?? settings.defaultServings ?? 2)));
-  const requestedSlots = (body.slots ?? settings.defaultSlots ?? ['abend']).filter(
+  // Tage, Mahlzeiten und Portionen kommen aus den Haushalts-Vorgaben, sofern nicht explizit übergeben
+  const householdPlan = await loadHouseholdRaw(body.householdId!);
+  const servings = Math.min(
+    12,
+    Math.max(1, Math.round(body.servings ?? householdPlan.planServings ?? settings.defaultServings ?? 2)),
+  );
+  const requestedSlots = (body.slots ?? householdPlan.planSlots ?? settings.defaultSlots ?? ['abend']).filter(
     (s): s is Slot => slotSchema.safeParse(s).success,
   );
   const slots = requestedSlots.length ? requestedSlots : (['abend'] as Slot[]);
   const allowedDays = Array.isArray(body.days) && body.days.length
     ? body.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
-    : [0, 1, 2, 3, 4, 5, 6];
+    : householdPlan.planDays.length
+      ? householdPlan.planDays
+      : [0, 1, 2, 3, 4, 5, 6];
   const diets = [...new Set([...(householdPrefs?.diets ?? []), ...settings.diets])];
   const allergies = [...new Set([...(householdPrefs?.allergies ?? []), ...settings.allergies])];
   const cuisines = [...new Set([...(householdPrefs?.cuisines ?? []), ...settings.cuisines])];
@@ -502,7 +509,34 @@ export async function planWeekForUser(
       [body.householdId, weekStart, userId],
     );
     const planId = planRow.rows[0].id;
+
+    // Mischung: ein Teil der Slots wird mit vorhandenen Rezepten belegt, der Rest neu erzeugt.
+    // So wächst die Sammlung, ohne dass jede Woche alles neu erfunden wird.
+    const slotsToFill: Array<{ dayIndex: number; slot: string }> = [];
+    for (const day of plan.days) {
+      if (!allowedDays.includes(day.dayIndex) || busyDays.has(day.dayIndex)) continue;
+      for (const meal of day.meals ?? []) slotsToFill.push({ dayIndex: day.dayIndex, slot: meal.slot });
+    }
+    const reuseCount = Math.max(1, Math.min(slotsToFill.length - 1, Math.round(slotsToFill.length * 0.4)));
+    const reuseSlots = new Set<string>();
+    const reuseRecipes: Array<{ id: string; title: string }> = [];
+    if (body.mode !== 'fill' && reuseCount > 0) {
+      const pool2 = await pool.query<{ id: string; title: string }>(
+        `SELECT id, title FROM recipes
+          WHERE status = 'active' AND title <> ALL($1::text[])
+            AND NOT (allergens && $2::text[])
+            AND ($3::text[] = '{}' OR diets && $3::text[])
+          ORDER BY random() LIMIT $4`,
+        [recentTitles.length ? recentTitles : [''], allergies, diets, reuseCount],
+      );
+      reuseRecipes.push(...pool2.rows);
+      const shuffledSlots = [...slotsToFill].sort(() => Math.random() - 0.5);
+      for (let i = 0; i < reuseRecipes.length; i++) reuseSlots.add(`${shuffledSlots[i].dayIndex}|${shuffledSlots[i].slot}`);
+    }
+
     let created = 0;
+    let reused = 0;
+    let reuseIndex = 0;
     const positions = new Map<number, number>();
     for (const day of plan.days) {
       if (!allowedDays.includes(day.dayIndex)) continue;
@@ -510,6 +544,21 @@ export async function planWeekForUser(
       if (!dayMeals.length) continue;
       for (const meal of dayMeals) {
         if (busyDays.has(day.dayIndex)) continue;
+
+        // Slot ist für ein vorhandenes Rezept vorgesehen
+        if (reuseSlots.has(`${day.dayIndex}|${meal.slot}`) && reuseRecipes[reuseIndex]) {
+          const pick = reuseRecipes[reuseIndex++];
+          const nextPos = positions.get(day.dayIndex) ?? 0;
+          positions.set(day.dayIndex, nextPos + 1);
+          await pool.query(
+            `INSERT INTO plan_entries (plan_id, day_index, slot, position, recipe_id, servings)
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [planId, day.dayIndex, meal.slot, nextPos, pick.id, servings],
+          );
+          reused += 1;
+          continue;
+        }
+
         const recipe = normalizeRecipe({ ...meal.recipe, servings: meal.recipe.servings ?? servings });
         const inserted = await pool.query<{ id: string }>(
           `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, total_minutes, difficulty, tags, source, ingredients, steps, nutrition)
@@ -545,6 +594,7 @@ export async function planWeekForUser(
     return {
       plan: await loadPlan(body.householdId!, weekStart),
       created,
+      reused,
       notes: plan.notes ?? '',
       days: [...WEEK_DAYS],
     };
@@ -553,6 +603,21 @@ export async function planWeekForUser(
     throw new WeekPlanError(502, 'ai-failed', e instanceof Error ? e.message : 'KI-Antwort fehlgeschlagen.');
   }
 }
+
+aiRouter.post('/prebuild', async (req: AuthRequest, res) => {
+  const householdId = String((req.body as { householdId?: string })?.householdId ?? '');
+  const access = await requireHousehold(householdId, req.userId!);
+  if (!access.ok) {
+    fail(res, access.status, access.error, access.message);
+    return;
+  }
+  try {
+    const result = await prebuildNextWeek(householdId, req.userId!);
+    res.json(result);
+  } catch (e) {
+    fail(res, 502, 'ai-failed', e instanceof Error ? e.message : 'Vorbau fehlgeschlagen.');
+  }
+});
 
 aiRouter.post('/week', async (req: AuthRequest, res) => {
   try {

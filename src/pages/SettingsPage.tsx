@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api, setToken } from '../lib/api';
+import { Collapsible } from '../components/Collapsible';
 import {
   ALLERGY_OPTIONS as ALLERGY_OPTIONS_BASE,
   APPLIANCE_OPTIONS as APPLIANCE_OPTIONS_BASE,
@@ -264,16 +265,24 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="card space-y-4 p-5">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-leaf" />
-          <div>
-            <p className="label !mb-0">KI-Vorgaben</p>
-            <p className="mt-1 text-xs text-ink/50">
-              Diese Angaben nutzt der Assistent automatisch, wenn du Rezepte oder Wochen erstellen lässt.
-            </p>
-          </div>
-        </div>
+      <div className="card p-4">
+        <Collapsible
+          title="KI-Vorgaben"
+          summary={
+            [
+              settings.diets.join(', '),
+              settings.cuisines.join(', '),
+              settings.allergies.length ? `ohne ${settings.allergies.join(', ')}` : '',
+              settings.dislikes.length ? `${settings.dislikes.length} Abneigungen` : '',
+              settings.appliances.length ? `${settings.appliances.length} Geräte` : '',
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'keine Vorgaben — antippen zum Bearbeiten'
+          }
+        >
+          <p className="text-xs text-ink/50">
+            Diese Angaben nutzt der Assistent automatisch, wenn du Rezepte oder Wochen erstellen lässt.
+          </p>
         <div className="space-y-5">
           <OptionRow
             label="Portionen (Standard)"
@@ -468,9 +477,10 @@ export function SettingsPage() {
           </div>
         </div>
         {settingsSaved && <p className="text-xs font-semibold text-leaf">Einstellung gespeichert</p>}
-      </div>
+        </Collapsible>
+        </div>
 
-      <div className="card space-y-3 p-5">
+        <div className="card space-y-3 p-5">
         <p className="label !mb-0">Darstellung</p>
         <div className="flex flex-wrap gap-2">
           {[

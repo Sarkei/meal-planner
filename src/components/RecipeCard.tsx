@@ -12,13 +12,6 @@ export function RecipeCard({
 }) {
   return (
     <div className="card group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg">
-      {recipe.imageUrl ? (
-        <img src={recipe.imageUrl} alt={recipe.title} className="h-36 w-full object-cover" loading="lazy" />
-      ) : (
-        <div className="flex h-24 w-full items-center justify-center bg-gradient-to-br from-leaf-soft via-cream to-amber-100">
-          <ChefHat className="h-7 w-7 text-leaf/35" />
-        </div>
-      )}
       <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <button className="text-left" onClick={onOpen}>

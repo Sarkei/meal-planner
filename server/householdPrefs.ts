@@ -66,6 +66,14 @@ export interface HouseholdPreferences {
   maxMinutes: number | null;
   kcalTarget: number | null;
   note: string;
+  /** Wochentage, die geplant werden sollen (0 = Montag). Leer = alle. */
+  planDays: number[];
+  /** Mahlzeiten pro Tag. Leer = abends. */
+  planSlots: string[];
+  /** Portionen pro Mahlzeit. */
+  planServings: number;
+  /** Woche automatisch am Freitagmorgen vorbauen. */
+  autoPlan: boolean;
 }
 
 export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
@@ -77,6 +85,10 @@ export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
   maxMinutes: null,
   kcalTarget: null,
   note: '',
+  planDays: [0, 1, 2, 3, 4],
+  planSlots: ['abend'],
+  planServings: 2,
+  autoPlan: true,
 };
 
 function list(value: unknown, max: number, allowed?: readonly string[]): string[] {
@@ -107,6 +119,19 @@ export function normalizeHouseholdPreferences(raw: unknown): HouseholdPreference
     maxMinutes: numberOrNull(value.maxMinutes, 5, 240),
     kcalTarget: numberOrNull(value.kcalTarget, 200, 2000),
     note: String(value.note ?? '').slice(0, 400),
+    planDays: (() => {
+      const days = Array.isArray(value.planDays)
+        ? [...new Set(value.planDays.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort()
+        : [];
+      // Ohne Angabe Montag bis Freitag — nie „kein Tag"
+      return days.length ? days : [0, 1, 2, 3, 4];
+    })(),
+    planSlots: (() => {
+      const slots = list(value.planSlots, 4, ['fruehstueck', 'mittag', 'abend', 'snack']);
+      return slots.length ? slots : ['abend'];
+    })(),
+    planServings: Math.min(12, Math.max(1, Number(value.planServings) || 2)),
+    autoPlan: value.autoPlan !== false,
   };
 }
 

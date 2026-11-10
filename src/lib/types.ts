@@ -19,6 +19,14 @@ export type HouseholdPreferences = {
   maxMinutes: number | null;
   kcalTarget: number | null;
   note: string;
+  /** Geplante Wochentage (0 = Montag). */
+  planDays: number[];
+  /** Mahlzeiten pro Tag. */
+  planSlots: string[];
+  /** Portionen pro Mahlzeit. */
+  planServings: number;
+  /** Freitags automatisch die Folgewoche vorbauen. */
+  autoPlan: boolean;
 };
 
 export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
@@ -30,6 +38,10 @@ export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
   maxMinutes: null,
   kcalTarget: null,
   note: '',
+  planDays: [0, 1, 2, 3, 4],
+  planSlots: ['abend'],
+  planServings: 2,
+  autoPlan: true,
 };
 
 export type HouseholdMember = {

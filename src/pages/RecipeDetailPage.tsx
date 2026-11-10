@@ -59,8 +59,6 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
   const [comments, setComments] = useState<RecipeComment[]>([]);
   const [commentText, setCommentText] = useState('');
 
-  const [imageState, setImageState] = useState<'pending' | 'done' | 'failed'>('pending');
-
   const load = useCallback(async () => {
     if (isNew) {
       setEditing(true);
@@ -83,30 +81,6 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
       setLoading(false);
     }
   }, [isNew, recipeId, settings.defaultServings]);
-
-  // Solange kein Bild da ist: nachfragen, ob der Hintergrund-Arbeiter fertig ist
-  useEffect(() => {
-    if (!recipe || recipe.imageUrl) return;
-    let alive = true;
-    const timer = window.setInterval(async () => {
-      try {
-        const status = await api<{ status: string }>(`/recipes/${recipe.id}/image-status`);
-        if (!alive) return;
-        if (status.status === 'done') {
-          setImageState('done');
-          await load();
-        } else if (status.status === 'failed') {
-          setImageState('failed');
-        }
-      } catch {
-        /* still weiter versuchen */
-      }
-    }, 3500);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, [recipe?.id, recipe?.imageUrl, load]);
 
   useEffect(() => {
     void load();
@@ -322,46 +296,6 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
         recipe && (
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="card overflow-hidden lg:col-span-2">
-              {/* 1. Bild */}
-              {recipe.imageUrl ? (
-                <div className="relative">
-                  <img src={recipe.imageUrl} alt={recipe.title} className="h-56 w-full object-cover sm:h-72" />
-                  <button
-                    className="absolute right-2 bottom-2 rounded-lg bg-black/55 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur"
-                    onClick={async () => {
-                      await api(`/recipes/${recipe.id}/image`, { method: 'POST' });
-                      setImageState('pending');
-                      window.alert('Neues Bild wird gezeichnet — es erscheint in wenigen Sekunden.');
-                    }}
-                  >
-                    Bild neu zeichnen
-                  </button>
-                </div>
-              ) : (
-                <div className="flex h-40 w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-leaf-soft via-cream to-amber-100 text-center sm:h-56">
-                  {imageState === 'failed' ? (
-                    <>
-                      <ChefHat className="h-10 w-10 text-leaf/40" />
-                      <p className="text-xs text-ink/50">Bild konnte nicht gezeichnet werden.</p>
-                      <button
-                        className="btn btn-ghost !py-1 text-xs"
-                        onClick={async () => {
-                          await api(`/recipes/${recipe.id}/image`, { method: 'POST' });
-                          setImageState('pending');
-                        }}
-                      >
-                        erneut versuchen
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 className="h-8 w-8 animate-spin text-leaf/50" />
-                      <p className="text-xs text-ink/50">Die KI zeichnet das Gericht …</p>
-                    </>
-                  )}
-                </div>
-              )}
-
               <div className="space-y-6 p-5">
                 {/* 2. Titel + Kurzüberblick */}
                 <div>

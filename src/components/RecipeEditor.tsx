@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Plus, Sparkles, Trash2, ImagePlus } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import type { Ingredient, Nutrition, RecipeDraft } from '../lib/types';
 import { api } from '../lib/api';
 
@@ -61,17 +61,6 @@ function AutoTextarea({
       placeholder={placeholder}
     />
   );
-}
-
-/** Bild im Browser auf max. 1200 px verkleinern und als JPEG-Data-URL zurückgeben. */
-async function resizeImage(file: File, maxSize = 1200): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.82);
 }
 
 export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange: (next: RecipeDraft) => void }) {
@@ -145,59 +134,6 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
 
   return (
     <div className="space-y-6">
-      {/* Bild oben — wie in der fertigen Ansicht */}
-      <div>
-        {value.imageUrl ? (
-          <div className="relative overflow-hidden rounded-2xl">
-            <img src={value.imageUrl} alt="Rezeptbild" className="h-48 w-full object-cover sm:h-64" />
-            <button
-              type="button"
-              onClick={() => set('imageUrl', null)}
-              className="absolute top-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-xs font-semibold text-white"
-            >
-              Bild entfernen
-            </button>
-          </div>
-        ) : (
-          <label className="flex h-36 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-ink/25 bg-cream text-sm text-ink/45 transition hover:border-leaf/50 hover:text-leaf sm:h-48">
-            <ImagePlus className="h-7 w-7" />
-            <span className="font-semibold">Bild vom Gericht hinzufügen</span>
-            <span className="text-[11px]">Klicken zum Hochladen (wird automatisch verkleinert)</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void resizeImage(file).then((url) => set('imageUrl', url));
-              }}
-            />
-          </label>
-        )}
-        {value.imageUrl && (
-          <div className="mt-2 flex gap-2">
-            <label className="btn btn-ghost cursor-pointer text-xs">
-              <ImagePlus className="h-3.5 w-3.5" /> Anderes Bild
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void resizeImage(file).then((url) => set('imageUrl', url));
-                }}
-              />
-            </label>
-            <input
-              className="input"
-              value={value.imageUrl.startsWith('data:') ? '' : value.imageUrl}
-              onChange={(e) => set('imageUrl', e.target.value.trim() || null)}
-              placeholder="oder Bild-URL einfügen (https://…)"
-            />
-          </div>
-        )}
-      </div>
-
       {/* Titel + Beschreibung */}
       <div className="space-y-3">
         <input

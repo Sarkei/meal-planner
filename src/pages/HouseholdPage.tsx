@@ -26,6 +26,7 @@ import { addDays, formatWeekLabel, mondayOf, toYmd } from '../lib/api';
 import { WEEKDAYS, SLOTS } from '../lib/types';
 import { Modal } from '../components/Modal';
 import { TagListInput } from '../components/TagListInput';
+import { Collapsible } from '../components/Collapsible';
 
 type ChipGroupProps = {
   label: string;
@@ -325,23 +326,32 @@ export function HouseholdPage() {
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       {info && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm font-medium text-leaf">{info}</p>}
 
-      <div className="card space-y-5 p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="mb-1 flex items-center gap-2">
-              <Utensils className="h-4 w-4 text-leaf" />
-              <p className="label !mb-0">Vorgaben für den Haushalt</p>
-            </div>
+      <div className="card p-4">
+        <Collapsible
+          title="Vorgaben für den Haushalt"
+          summary={
+            [
+              prefs.diets.join(', '),
+              prefs.cuisines.join(', '),
+              prefs.allergies.length ? `ohne ${prefs.allergies.join(', ')}` : '',
+              prefs.dislikes.length ? `${prefs.dislikes.length} Abneigungen` : '',
+              prefs.appliances.length ? `${prefs.appliances.length} Geräte` : '',
+              `${prefs.planDays.length} Tage · ${prefs.planSlots.length} Mahlzeit(en) · ${prefs.planServings} Port.`,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          }
+        >
+          <div className="flex items-start justify-between gap-3">
             <p className="text-xs text-ink/50">
               Gilt für alle Mitglieder: Wochenplan, KI-Vorschläge und als Filter-Vorlage in der Rezeptsammlung.
             </p>
+            {prefsSaved && (
+              <span className="flex items-center gap-1 text-xs font-semibold text-leaf">
+                <Check className="h-3.5 w-3.5" /> gespeichert
+              </span>
+            )}
           </div>
-          {prefsSaved && (
-            <span className="flex items-center gap-1 text-xs font-semibold text-leaf">
-              <Check className="h-3.5 w-3.5" /> gespeichert
-            </span>
-          )}
-        </div>
 
         <ChipGroup
           label="Ernährungsform"
@@ -404,6 +414,92 @@ export function HouseholdPage() {
           }
         />
 
+        <div className="rounded-2xl border border-ink/10 bg-cream/60 p-3">
+          <p className="label">Wochenplan-Vorgaben</p>
+          <p className="mb-3 text-xs text-ink/50">
+            Danach richtet sich jeder erzeugte Wochenplan — auch der, den die App freitags automatisch vorbaut.
+          </p>
+
+          <div className="mb-3">
+            <span className="text-xs font-semibold text-ink/60">Tage</span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {WEEKDAYS.map((day, index) => {
+                const active = prefs.planDays.includes(index);
+                return (
+                  <button
+                    key={day}
+                    onClick={() => {
+                      const next = active
+                        ? prefs.planDays.filter((d) => d !== index)
+                        : [...prefs.planDays, index].sort();
+                      void savePrefs({ planDays: next.length ? next : [index] });
+                    }}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                    }`}
+                  >
+                    {day.slice(0, 2)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <span className="text-xs font-semibold text-ink/60">Mahlzeiten pro Tag</span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {[
+                { id: 'fruehstueck', label: 'Frühstück' },
+                { id: 'mittag', label: 'Mittag' },
+                { id: 'abend', label: 'Abend' },
+                { id: 'snack', label: 'Snack' },
+              ].map((slot) => {
+                const active = prefs.planSlots.includes(slot.id);
+                return (
+                  <button
+                    key={slot.id}
+                    onClick={() => {
+                      const next = active
+                        ? prefs.planSlots.filter((s) => s !== slot.id)
+                        : [...prefs.planSlots, slot.id];
+                      void savePrefs({ planSlots: next.length ? next : [slot.id] });
+                    }}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                    }`}
+                  >
+                    {slot.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 text-xs font-semibold text-ink/60">
+              Portionen pro Mahlzeit
+              <input
+                type="number"
+                min={1}
+                max={12}
+                className="input !w-20 !py-1 text-center"
+                value={prefs.planServings}
+                onChange={(e) => setPrefs({ ...prefs, planServings: Number(e.target.value) || 1 })}
+                onBlur={() => void savePrefs({ planServings: prefs.planServings })}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold text-ink/60">
+              <input
+                type="checkbox"
+                checked={prefs.autoPlan}
+                onChange={(e) => void savePrefs({ autoPlan: e.target.checked })}
+                className="h-4 w-4 accent-[var(--color-leaf)]"
+              />
+              Freitags die Folgewoche vorbauen
+            </label>
+          </div>
+        </div>
+
         <div>
           <label className="label">Lebensmittel, die niemand mag</label>
           <p className="mb-2 text-xs text-ink/50">
@@ -427,6 +523,7 @@ export function HouseholdPage() {
             onBlur={() => void savePrefs({ note: prefs.note })}
           />
         </div>
+        </Collapsible>
       </div>
 
       <div className="card p-5">
@@ -467,186 +564,12 @@ export function HouseholdPage() {
         )}
       </div>
 
-      <div className="card space-y-3 p-5">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-leaf" />
-          <p className="label !mb-0">Wochenplan für den ganzen Haushalt</p>
-        </div>
-        <p className="text-xs text-ink/55">
-          Wähle Tage und Mahlzeiten — die KI plant die Woche anhand der Vorgaben <strong>aller</strong> Mitglieder
-          (Ernährungsform, Allergien, Küche, Zeit, Kalorien, Sonderwünsche) und trägt alles direkt in den Wochenplan ein.
-        </p>
-        <button className="btn btn-primary" onClick={() => setShowPlan(true)}>
-          <Sparkles className="h-4 w-4" /> Wochenplan erstellen
-        </button>
-      </div>
-
       <button className="btn btn-ghost !text-clay" onClick={() => void leave()} disabled={busy}>
         <LogOut className="h-4 w-4" /> {isOwner ? 'Haushalt löschen' : 'Haushalt verlassen'}
       </button>
 
-      {showPlan && (
-        <HouseholdPlanModal
-          householdId={activeHousehold.id}
-          householdName={activeHousehold.name}
-          onClose={() => setShowPlan(false)}
-        />
-      )}
     </div>
   );
 }
 
 const PLAN_SLOTS: { id: Slot; label: string }[] = SLOTS.filter((s) => s.id !== 'snack');
-
-function HouseholdPlanModal({
-  householdId,
-  householdName,
-  onClose,
-}: {
-  householdId: string;
-  householdName: string;
-  onClose: () => void;
-}) {
-  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
-  const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
-  const [slots, setSlots] = useState<Slot[]>(['abend']);
-  const [servings, setServings] = useState(2);
-  const [mode, setMode] = useState<'replace' | 'fill'>('replace');
-  const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
-
-  const toggleDay = (day: number) =>
-    setDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)));
-  const toggleSlot = (slot: Slot) =>
-    setSlots((prev) => (prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]));
-
-  const create = async () => {
-    setBusy(true);
-    setError(null);
-    setResult(null);
-    try {
-      const data = await api<{ created: number; notes: string }>('/ai/week', {
-        method: 'POST',
-        body: {
-          householdId,
-          weekStart,
-          days,
-          slots,
-          servings,
-          mode,
-          mergeMembers: true,
-          constraints: notes,
-        },
-      });
-      setResult(`${data.created} Mahlzeiten für ${householdName} geplant. ${data.notes}`.trim());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Der Wochenplan konnte nicht erstellt werden.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal title="Wochenplan für den Haushalt" subtitle="Vorgaben aller Mitglieder werden berücksichtigt" onClose={onClose} wide>
-      <div className="space-y-4">
-        <div>
-          <label className="label">Woche</label>
-          <div className="flex items-center gap-2">
-            <button className="btn btn-ghost !px-2 !py-1 text-xs" onClick={() => setWeekStart(addDays(weekStart, -7))}>
-              ‹
-            </button>
-            <span className="text-sm font-semibold">{formatWeekLabel(weekStart)}</span>
-            <button className="btn btn-ghost !px-2 !py-1 text-xs" onClick={() => setWeekStart(addDays(weekStart, 7))}>
-              ›
-            </button>
-            <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => setWeekStart(mondayOf(new Date()))}>
-              Diese Woche
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="label">An welchen Tagen?</label>
-          <div className="flex flex-wrap gap-2">
-            {WEEKDAYS.map((day, index) => (
-              <button
-                key={day}
-                onClick={() => toggleDay(index)}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                  days.includes(index) ? 'border-leaf bg-leaf-soft text-leaf' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
-                }`}
-              >
-                {day.slice(0, 2)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="label">Welche Mahlzeiten?</label>
-          <div className="flex flex-wrap gap-2">
-            {PLAN_SLOTS.map((slot) => (
-              <button
-                key={slot.id}
-                onClick={() => toggleSlot(slot.id)}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                  slots.includes(slot.id) ? 'border-leaf bg-leaf-soft text-leaf' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
-                }`}
-              >
-                {slot.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Portionen pro Mahlzeit</label>
-            <input
-              type="number"
-              min={1}
-              max={12}
-              className="input"
-              value={servings}
-              onChange={(e) => setServings(Number(e.target.value))}
-            />
-          </div>
-          <div>
-            <label className="label">Bestehendes</label>
-            <select className="select" value={mode} onChange={(e) => setMode(e.target.value as 'replace' | 'fill')}>
-              <option value="replace">Ersetzen</option>
-              <option value="fill">Nur leere Tage füllen</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="label">Zusätzliche Vorgaben (optional)</label>
-          <input
-            className="input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="z. B. am Wochenende aufwendiger kochen, wenig Fleisch"
-          />
-        </div>
-
-        <button className="btn btn-primary w-full" onClick={() => void create()} disabled={busy || days.length === 0 || slots.length === 0}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {busy ? 'Woche wird geplant …' : 'Wochenplan erstellen'}
-        </button>
-
-        {result && (
-          <div className="space-y-2 rounded-xl bg-leaf-soft px-3 py-2 text-sm text-leaf">
-            <p>{result}</p>
-            <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => window.location.assign(`#/week`)}>
-              Zum Wochenplan
-            </button>
-          </div>
-        )}
-        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
-      </div>
-    </Modal>
-  );
-}

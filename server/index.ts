@@ -4,8 +4,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { initDb, pool } from './db';
 import { backfillRecipeMeta } from './recipeMeta';
-import { startImageWorker } from './images';
 import { chatRouter } from './chat';
+import { startScheduler } from './scheduler';
 import { attachUserFromToken, authRouter } from './auth';
 import { requireAuth } from './guards';
 import { householdsRouter } from './households';
@@ -84,7 +84,7 @@ async function start(): Promise<void> {
         SET data = jsonb_set(data - 'diet', '{diets}', jsonb_build_array(data->>'diet'))
       WHERE data ? 'diet' AND NOT data ? 'diets'`,
   );
-  startImageWorker();
+  startScheduler();
   const ai = resolveProvider();
   app.listen(PORT, () => {
     console.log(`🍲 Meal Planner läuft auf http://localhost:${PORT}`);
