@@ -34,12 +34,37 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 export function ChatPage() {
-  const { activeHousehold, refresh } = useAuth();
+  const { activeHousehold, refresh, user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState('');
+  // Entwurf überlebt Tab-Wechsel und Neuladen
+  const draftKey = `mealplanner.chatDraft.${user?.id ?? 'anon'}`;
+  const [draft, setDraft] = useState(() => localStorage.getItem(draftKey) ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Textfeld wächst mit dem Inhalt statt Scrollbalken zu zeigen */
+  const autoGrow = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  };
+
+  // Höhe immer an den Inhalt anpassen — auch wenn der Entwurf aus dem Speicher zurückkommt
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (!draft) {
+      el.style.height = '';
+      return;
+    }
+    autoGrow(el);
+  }, [draft]);
+
+  useEffect(() => {
+    if (draft) localStorage.setItem(draftKey, draft);
+    else localStorage.removeItem(draftKey);
+  }, [draft, draftKey]);
 
   const scrollDown = useCallback(() => {
     window.setTimeout(() => {
@@ -92,11 +117,12 @@ export function ChatPage() {
   const reset = async () => {
     await api('/chat/messages', { method: 'DELETE' });
     setMessages([]);
+    setDraft('');
     setError(null);
   };
 
   return (
-    <div className="w-full space-y-3">
+    <div className="flex w-full flex-col gap-3" style={{ minHeight: 'calc(100dvh - 240px)' }}>
       <div className="card flex items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-leaf" />
@@ -115,7 +141,7 @@ export function ChatPage() {
         )}
       </div>
 
-      <div ref={scrollRef} className="card min-h-[45vh] max-h-[62vh] space-y-4 overflow-y-auto p-4">
+      <div ref={scrollRef} className="card min-h-[38vh] flex-1 space-y-4 overflow-y-auto p-4">
         {messages.length === 0 && (
           <div className="space-y-3 py-6 text-center">
             <Sparkles className="mx-auto h-8 w-8 text-leaf/40" />
@@ -179,23 +205,34 @@ export function ChatPage() {
 
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
 
-      <div className="card flex items-end gap-2 p-3">
-        <textarea
-          className="input max-h-40 min-h-[46px] flex-1 resize-none"
-          rows={1}
-          placeholder="Schreib dem Assistenten … (Enter sendet, Shift+Enter neue Zeile)"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void send(draft);
-            }
-          }}
-        />
-        <button className="btn btn-primary shrink-0" onClick={() => void send(draft)} disabled={busy || !draft.trim()}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Senden
-        </button>
+      {/* Eingabe klebt unten wie in einem normalen Chat (mobil oberhalb der Tab-Leiste) */}
+      <div className="sticky bottom-[72px] z-20 rounded-2xl border border-ink/10 bg-white/95 p-2 shadow-sm backdrop-blur sm:bottom-2 sm:p-3">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            className="input max-h-40 min-h-[46px] flex-1 resize-none overflow-y-auto"
+            rows={1}
+            placeholder="Schreib dem Assistenten … (Enter sendet, Shift+Enter neue Zeile)"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              autoGrow(e.currentTarget);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void send(draft);
+              }
+            }}
+          />
+          <button
+            className="btn btn-primary h-[46px] shrink-0 self-end px-3"
+            onClick={() => void send(draft)}
+            disabled={busy || !draft.trim()}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Senden
+          </button>
+        </div>
       </div>
     </div>
   );
