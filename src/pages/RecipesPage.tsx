@@ -5,10 +5,12 @@ import {
   Heart,
   Loader2,
   Plus,
+  ScanBarcode,
   Search,
   SlidersHorizontal,
   Sparkles,
   Star,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -16,6 +18,7 @@ import {
 import { ALLERGY_OPTIONS, CUISINE_OPTIONS, DIET_OPTIONS, KCAL_OPTIONS, TIME_OPTIONS } from '../lib/preferences';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
+import { BarcodeScanner } from '../components/BarcodeScanner';
 import { navigate } from '../App';
 import { RecipeCard } from '../components/RecipeCard';
 import { Modal } from '../components/Modal';
@@ -522,7 +525,15 @@ export function RecipesPage() {
 
 function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { activeHousehold, settings } = useAuth();
-  const [tab, setTab] = useState<'ai' | 'manual'>('ai');
+  const [tab, setTab] = useState<'ai' | 'manual' | 'scan'>('ai');
+  type ScanItem = { barcode: string; name: string; brand: string; grams: number; kcal: number | null; protein: number | null; carbs: number | null; fat: number | null };
+  const [items, setItems] = useState<ScanItem[]>([]);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanCode, setScanCode] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanTitle, setScanTitle] = useState('');
+  const [scanNote, setScanNote] = useState('');
+  const [scanServings, setScanServings] = useState(settings.defaultServings);
   const [idea, setIdea] = useState('');
   const [servings, setServings] = useState(settings.defaultServings);
   const [constraints, setConstraints] = useState('');
@@ -553,11 +564,102 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
     }
   };
 
+  const scanTotals = items.reduce(
+    (acc, item) => {
+      const factor = item.grams / 100;
+      return {
+        kcal: acc.kcal + (item.kcal ?? 0) * factor,
+        protein: acc.protein + (item.protein ?? 0) * factor,
+        carbs: acc.carbs + (item.carbs ?? 0) * factor,
+        fat: acc.fat + (item.fat ?? 0) * factor,
+      };
+    },
+    { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+  );
+
+  async function addByBarcode(code: string) {
+    setScanning(true);
+    setError(null);
+    try {
+      const hit = await api<{
+        barcode: string;
+        name: string;
+        brand: string;
+        kcal: number | null;
+        protein: number | null;
+        carbs: number | null;
+        fat: number | null;
+      }>(`/food/barcode/${code}`);
+      setScanTitle((prev) => prev || hit.name);
+      setItems((prev) => [
+        ...prev,
+        {
+          barcode: hit.barcode || code,
+          name: hit.name,
+          brand: hit.brand,
+          grams: 100,
+          kcal: hit.kcal,
+          protein: hit.protein,
+          carbs: hit.carbs,
+          fat: hit.fat,
+        },
+      ]);
+    } catch {
+      setError(`Kein Produkt zu ${code} gefunden.`);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function createFromScan() {
+    if (!items.length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const title = scanTitle.trim() || items[0].name;
+      const steps = [scanNote.trim() || 'Alle Zutaten nach Wunsch zubereiten und zusammenstellen.'];
+      const data = await api<{ recipe: Recipe }>('/recipes', {
+        method: 'POST',
+        body: {
+          householdId: activeHousehold?.id,
+          title,
+          description: 'Per Barcode erfasst',
+          servings: scanServings,
+          prepMinutes: 10,
+          totalMinutes: 20,
+          difficulty: 'leicht',
+          tags: ['spontan'],
+          ingredients: items.map((item) => ({
+            name: item.brand && !item.name.toLowerCase().includes(item.brand.toLowerCase())
+              ? `${item.name} (${item.brand})`
+              : item.name,
+            amount: item.grams,
+            unit: 'g',
+          })),
+          steps,
+          nutrition: {
+            kcal: Math.round(scanTotals.kcal / scanServings),
+            protein: Math.round((scanTotals.protein / scanServings) * 10) / 10,
+            carbs: Math.round((scanTotals.carbs / scanServings) * 10) / 10,
+            fat: Math.round((scanTotals.fat / scanServings) * 10) / 10,
+          },
+        },
+      });
+      onClose();
+      onCreated();
+      if (data.recipe?.id) navigate(`recipe/${data.recipe.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Rezept konnte nicht angelegt werden.');
+      setBusy(false);
+    }
+  }
+
   return (
-    <Modal title="Neues Rezept" subtitle="Direkt von der KI erstellen lassen oder selbst schreiben" onClose={onClose}>
+    <Modal title="Neues Rezept" subtitle="KI-Idee, Barcode oder selbst schreiben" onClose={onClose}>
       <div className="mb-4 flex gap-1 rounded-xl bg-ink/5 p-1 text-sm font-semibold">
         {[
           { id: 'ai' as const, label: 'KI-Idee' },
+          { id: 'scan' as const, label: 'Barcode' },
           { id: 'manual' as const, label: 'Selbst schreiben' },
         ].map((t) => (
           <button
@@ -610,6 +712,156 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
             {busy ? 'Rezept wird geschrieben …' : 'Erstellen und zu Favoriten'}
           </button>
           {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+        </div>
+      ) : tab === 'scan' ? (
+        <div className="space-y-3">
+          <p className="text-sm text-ink/60">
+            Barcode scannen, Gramm festlegen, fertig: Die gescannten Produkte werden zu einem Rezept mit geschätzten
+            Nährwerten.
+          </p>
+
+          <button
+            className="btn btn-primary w-full"
+            onClick={() => setScanOpen(true)}
+            disabled={scanning}
+          >
+            {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
+            {scanning ? 'Produkt wird gesucht …' : 'Produkt scannen'}
+          </button>
+
+          <div className="flex items-center gap-2">
+            <input
+              className="input flex-1"
+              value={scanCode}
+              onChange={(e) => setScanCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const code = scanCode.replace(/[^0-9]/g, '');
+                  if (code.length >= 6) {
+                    void addByBarcode(code);
+                    setScanCode('');
+                  }
+                }
+              }}
+              placeholder="oder Barcode eintippen"
+              inputMode="numeric"
+            />
+            <button
+              className="btn btn-ghost !px-3 !py-2 text-[12px]"
+              onClick={() => {
+                const code = scanCode.replace(/[^0-9]/g, '');
+                if (code.length >= 6) {
+                  void addByBarcode(code);
+                  setScanCode('');
+                }
+              }}
+            >
+              Hinzufügen
+            </button>
+          </div>
+
+          {items.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-ink/15 px-3 py-6 text-center text-sm text-ink/45">
+              Noch kein Produkt erfasst.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((item, index) => (
+                <li key={item.barcode + index} className="rounded-xl border border-ink/10 bg-white/70 p-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold">{item.name}</p>
+                      <p className="text-[11px] text-ink/50">
+                        {item.brand || 'ohne Marke'} · {item.kcal ?? '—'} kcal / 100 g
+                      </p>
+                    </div>
+                    <button
+                      className="btn btn-ghost !px-2 !py-1 text-[11px] text-red-600"
+                      onClick={() => setItems(items.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={item.grams}
+                      onChange={(e) => {
+                        const grams = Math.max(1, Number(e.target.value) || 1);
+                        setItems(items.map((it, i) => (i === index ? { ...it, grams } : it)));
+                      }}
+                      className="input !w-20 !py-1 text-center text-[13px]"
+                    />
+                    <span className="text-[11px] text-ink/50">g</span>
+                    <span className="ml-auto text-[11px] text-ink/50">
+                      {Math.round(((item.kcal ?? 0) * item.grams) / 100)} kcal
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {items.length > 0 && (
+            <div className="space-y-3 border-t border-ink/10 pt-3">
+              <div>
+                <label className="label">Name des Gerichts</label>
+                <input
+                  className="input"
+                  value={scanTitle}
+                  onChange={(e) => setScanTitle(e.target.value)}
+                  placeholder={items[0]?.name ?? 'z. B. Spontanes Abendessen'}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Portionen</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    className="input"
+                    value={scanServings}
+                    onChange={(e) => setScanServings(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Nährwerte pro Portion</label>
+                  <p className="input !bg-ink/5 text-[12px] text-ink/60">
+                    {Math.round(scanTotals.kcal / scanServings)} kcal · {Math.round((scanTotals.protein / scanServings) * 10) / 10} g P
+                  </p>
+                </div>
+              </div>
+              <div>
+                <label className="label">Notiz / Zubereitung (optional)</label>
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={scanNote}
+                  onChange={(e) => setScanNote(e.target.value)}
+                  placeholder="z. B. alles in die Pfanne, 8 Minuten braten"
+                />
+              </div>
+              <button className="btn btn-primary w-full" onClick={() => void createFromScan()} disabled={busy}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {busy ? 'Rezept wird angelegt …' : 'Rezept anlegen'}
+              </button>
+            </div>
+          )}
+
+          {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+
+          {scanOpen && (
+            <BarcodeScanner
+              onClose={() => setScanOpen(false)}
+              onDetected={(code) => {
+                setScanOpen(false);
+                void addByBarcode(code);
+              }}
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-4">

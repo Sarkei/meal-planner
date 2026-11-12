@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import type { Ingredient, Nutrition, RecipeDraft } from '../lib/types';
 import { api } from '../lib/api';
+import { FoodSearch } from './FoodSearch';
 
 /** Alle Einheiten, die in der Sammlung vorkommen — als Dropdown statt Freitext. */
 export const UNITS = [
@@ -218,6 +219,20 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
             <Plus className="h-3 w-3" /> Zutat
           </button>
         </div>
+        <FoodSearch
+          onPick={(hit, grams) => {
+            const emptyIndex = value.ingredients.findIndex((ing) => !ing.name.trim());
+            const brand = hit.brand && !hit.name.toLowerCase().includes(hit.brand.toLowerCase()) ? hit.brand : '';
+            const name = brand ? `${hit.name} (${brand})` : hit.name;
+            const patch = { name, amount: grams, unit: 'g' };
+            if (emptyIndex >= 0) {
+              setIngredient(emptyIndex, patch);
+              document.getElementById(`ing-name-${emptyIndex}`)?.focus();
+            } else {
+              set('ingredients', [...value.ingredients, patch]);
+            }
+          }}
+        />
         <div className="space-y-2">
           {value.ingredients.map((ing, i) => (
             <div key={i} className="flex items-center gap-2">

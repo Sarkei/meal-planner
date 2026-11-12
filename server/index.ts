@@ -13,6 +13,7 @@ import { recipesRouter } from './recipes';
 import { plansRouter } from './plans';
 import { aiRouter, resolveProvider } from './ai';
 import { shoppingRouter } from './shopping';
+import { foodRouter } from './food';
 import { eventsRouter } from './events';
 
 const app = express();
@@ -50,6 +51,7 @@ app.use('/api/plans', requireAuth, plansRouter);
 app.use('/api/ai', requireAuth, aiRouter);
 app.use('/api/chat', requireAuth, chatRouter);
 app.use('/api/shopping', requireAuth, shoppingRouter);
+app.use('/api/food', requireAuth, foodRouter);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not-found', message: 'Unbekannter Endpunkt.' });
