@@ -58,7 +58,16 @@ const KEYWORDS: Array<{ category: CategoryId; words: string[] }> = [
   },
   {
     category: 'gewuerze',
-    words: ['salbei', 'brühe', 'bouillon', 'sojasauce', 'fischsauce', 'worcestersauce'],
+    words: [
+      // Gewürze zuerst, damit sie nicht in „Sonstiges“ landen. Längere Wörter vor kürzeren:
+      // „paprikapulver“ vor „paprika“ (das ist Gemüse und steht in obst-gemuese).
+      'paprikapulver', 'paprika edelsüß', 'paprika rosenscharf', 'chilipulver', 'chiliflocken',
+      'currypulver', 'knoblauchpulver', 'zwiebelpulver', 'kümmel', 'oregano', 'thymian', 'rosmarin',
+      'zimt', 'muskat', 'kurkuma', 'lorbeer', 'koriandersamen', 'senfkörner', 'vanillezucker',
+      'backpulver', 'natron', 'hefe', 'gewürz', 'suppenwürze', 'brühpulver', 'salz', 'pfeffer',
+      'curry', 'chili', 'senf', 'essig', 'zucker', 'honig', 'salbei', 'brühe', 'bouillon',
+      'sojasauce', 'fischsauce', 'worcestersauce',
+    ],
   },
   {
     category: 'milchprodukte',
@@ -163,6 +172,98 @@ Antworte NUR mit JSON: {"category":"<id>"}`,
   return guessed;
 }
 
+/**
+ * Namen für die Einkaufsliste zusammenfassen: Zusätze in Klammern („(zum Abschmecken)“,
+ * „(zum Kochen)“, „(gemahlen)“) und Eigenschaftswörter („edelsüß“, „gemahlen“, „reif“)
+ * interessieren beim Einkaufen nicht — sie würden dieselbe Zutat mehrfach in die Liste schreiben.
+ */
+const QUALIFIER_WORDS = new Set([
+  'edelsüß', 'edelsuess', 'rosenscharf', 'gemahlen', 'gemahlene', 'gemahlener', 'getrocknet',
+  'getrocknete', 'getrockneter', 'frisch', 'frische', 'frischer', 'gehackt', 'gehackte', 'gehackter',
+  'fein', 'feine', 'feiner', 'grob', 'grobe', 'grober', 'gerieben', 'geriebene', 'geriebener',
+  'klein', 'kleine', 'kleiner', 'schwarz', 'schwarze', 'schwarzer', 'weiß', 'weiße', 'weißer',
+  'rot', 'rote', 'roter', 'reif', 'reife', 'reifer', 'altbacken', 'altbackene', 'altbackener',
+  'tiefgekühlt', 'tk', 'natur', 'pur', 'frischgerieben',
+]);
+
+/** Gleiche Zutat, anderer Name — beim Einkaufen ist das eine Position. */
+const SYNONYMS: Record<string, string> = {
+  knoblauchzehe: 'knoblauch',
+  knoblauchzehen: 'knoblauch',
+  zwiebeln: 'zwiebel',
+  karotten: 'karotte',
+  möhren: 'möhre',
+  eier: 'ei',
+};
+
+export function shoppingName(name: string): string {
+  const withoutBrackets = String(name ?? '').replace(/\([^)]*\)/g, ' ');
+  const words = withoutBrackets
+    .split(/[\s,]+/)
+    .map((w) => w.trim())
+    .filter(Boolean);
+  const meaningful = words.filter((w) => !QUALIFIER_WORDS.has(w.toLowerCase()));
+  // Nie alles wegstreichen: steht nur ein Eigenschaftswort da, bleibt der Originalname.
+  const kept = meaningful.length ? meaningful : words;
+  const joined = kept.join(' ').replace(/\s+/g, ' ').trim();
+  if (!joined) return String(name ?? '').trim();
+  const canonical = SYNONYMS[joined.toLowerCase()];
+  if (canonical) return canonical.charAt(0).toUpperCase() + canonical.slice(1);
+  return joined;
+}
+
+/** Einheiten in eine gemeinsame Familie bringen, damit Mengen addiert werden können. */
+const UNIT_FAMILIES: Record<string, { family: string; factor: number }> = {
+  g: { family: 'gewicht', factor: 1 },
+  kg: { family: 'gewicht', factor: 1000 },
+  ml: { family: 'fluessig', factor: 1 },
+  l: { family: 'fluessig', factor: 1000 },
+  tl: { family: 'loeffel', factor: 1 },
+  el: { family: 'loeffel', factor: 3 },
+  prise: { family: 'loeffel', factor: 0.1 },
+  pris: { family: 'loeffel', factor: 0.1 },
+  messerspitze: { family: 'loeffel', factor: 0.05 },
+  stueck: { family: 'stueck:stück', factor: 1 },
+  'stück': { family: 'stueck:stück', factor: 1 },
+  zehe: { family: 'stueck:zehe', factor: 1 },
+  zehen: { family: 'stueck:zehe', factor: 1 },
+  scheibe: { family: 'stueck:scheibe', factor: 1 },
+  scheiben: { family: 'stueck:scheibe', factor: 1 },
+  bund: { family: 'stueck:bund', factor: 1 },
+  dose: { family: 'stueck:dose', factor: 1 },
+  dosen: { family: 'stueck:dose', factor: 1 },
+  becher: { family: 'stueck:becher', factor: 1 },
+  packung: { family: 'stueck:packung', factor: 1 },
+  stange: { family: 'stueck:stange', factor: 1 },
+  handvoll: { family: 'stueck:handvoll', factor: 1 },
+};
+
+function roundNice(value: number): number {
+  const step = value < 1 ? 0.25 : 0.5;
+  return Math.max(step, Math.round(value / step) * step);
+}
+
+/** Summierte Menge in eine lesbare Einheit zurückrechnen. */
+function displayAmount(family: string, total: number, fallbackUnit: string): { amount: number; unit: string } {
+  if (family === 'gewicht') {
+    return total >= 1000
+      ? { amount: Math.round((total / 1000) * 10) / 10, unit: 'kg' }
+      : { amount: Math.round(total), unit: 'g' };
+  }
+  if (family === 'fluessig') {
+    return total >= 1000
+      ? { amount: Math.round((total / 1000) * 10) / 10, unit: 'l' }
+      : { amount: Math.round(total), unit: 'ml' };
+  }
+  if (family === 'loeffel') {
+    // Ab einem Esslöffel wird umgerechnet (1 EL = 3 TL), darunter bleibt es beim Teelöffel.
+    return total >= 3
+      ? { amount: roundNice(total / 3), unit: 'EL' }
+      : { amount: roundNice(total), unit: 'TL' };
+  }
+  return { amount: roundNice(total), unit: fallbackUnit };
+}
+
 /** Automatische Artikel aus dem Wochenplan neu berechnen (Prüfstatus und manuelle Artikel bleiben). */
 async function rebuildAutoItems(householdId: string, weekStart: string): Promise<void> {
   const rows = await pool.query<{ servings: number; entry_servings: number | null; ingredients: Ingredient[] }>(
@@ -174,19 +275,36 @@ async function rebuildAutoItems(householdId: string, weekStart: string): Promise
     [householdId, weekStart],
   );
 
-  const items = new Map<string, { name: string; unit: string; amount: number; unknown: boolean }>();
+  type Bucket = { name: string; family: string; unit: string; base: number; unknown: boolean };
+  const items = new Map<string, Bucket>();
   for (const row of rows.rows) {
     const factor = row.entry_servings && row.servings ? row.entry_servings / row.servings : 1;
     for (const ing of row.ingredients ?? []) {
-      const name = String(ing.name ?? '').trim();
-      if (!name) continue;
+      const rawName = String(ing.name ?? '').trim();
+      if (!rawName) continue;
+      const name = shoppingName(rawName);
       const unitKey = String(ing.unit ?? '').trim().toLowerCase();
-      const key = `${name.toLowerCase()}|${unitKey}`;
-      const current = items.get(key) ?? { name, unit: UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim(), amount: 0, unknown: false };
-      if (typeof ing.amount === 'number' && Number.isFinite(ing.amount)) current.amount += ing.amount * factor;
-      else current.unknown = true;
+      const unitInfo = UNIT_FAMILIES[unitKey];
+      const family = unitInfo?.family ?? `eigen:${unitKey}`;
+      const key = `${name.toLowerCase()}|${family}`;
+      const unitLabel = UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim();
+      const current =
+        items.get(key) ?? { name, family, unit: unitLabel, base: 0, unknown: false };
+      if (typeof ing.amount === 'number' && Number.isFinite(ing.amount)) {
+        current.base += ing.amount * factor * (unitInfo?.factor ?? 1);
+      } else {
+        current.unknown = true;
+      }
       items.set(key, current);
     }
+  }
+
+  const prepared = new Map<string, { name: string; unit: string; amount: number | null }>();
+  for (const [key, bucket] of items) {
+    const shown = bucket.unknown
+      ? { amount: null, unit: bucket.unit }
+      : displayAmount(bucket.family, bucket.base, bucket.unit);
+    prepared.set(key, { name: bucket.name, unit: shown.unit, amount: shown.amount });
   }
 
   const existing = await pool.query<{ key: string }>(
@@ -195,14 +313,14 @@ async function rebuildAutoItems(householdId: string, weekStart: string): Promise
   );
   const existingKeys = new Set(existing.rows.map((r) => r.key));
 
-  for (const [key, item] of items) {
+  for (const [key, item] of prepared) {
     await pool.query(
       `INSERT INTO shopping_items (household_id, week_start, key, name, amount, unit, category, source)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'auto')
        ON CONFLICT (household_id, week_start, key)
        DO UPDATE SET name = EXCLUDED.name, amount = EXCLUDED.amount, unit = EXCLUDED.unit,
                      category = EXCLUDED.category, updated_at = now()`,
-      [householdId, weekStart, key, item.name, item.unknown ? null : Math.round(item.amount * 10) / 10, item.unit, guessCategory(item.name)],
+      [householdId, weekStart, key, item.name, item.amount, item.unit, guessCategory(item.name)],
     );
     existingKeys.delete(key);
   }

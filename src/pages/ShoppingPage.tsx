@@ -22,6 +22,11 @@ type ShoppingList = {
   totalCount: number;
 };
 
+/** 1.5 → „1,5" (deutsche Schreibweise, ganze Zahlen ohne Komma). */
+function formatAmount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',');
+}
+
 export function ShoppingPage() {
   const { activeHousehold } = useAuth();
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
@@ -230,7 +235,7 @@ export function ShoppingPage() {
                         {item.source === 'manual' && <span className="ml-2 text-[10px] font-semibold text-leaf">manuell</span>}
                       </span>
                       <span className="text-sm font-semibold text-ink/60">
-                        {item.amount != null ? `${item.amount} ` : ''}
+                        {item.amount != null ? `${formatAmount(item.amount)} ` : ''}
                         {item.unit}
                       </span>
                       {item.source === 'manual' && (
