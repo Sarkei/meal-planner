@@ -209,6 +209,127 @@ aiRouter.get('/status', (_req, res) => {
   });
 });
 
+/**
+ * Freitext-Antwort ohne JSON-Zwang — für den Rezept-Chat.
+ * Bekommt echten Gesprächsverlauf, damit Rückfragen funktionieren.
+ */
+async function callChatText(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  temperature = 0.4,
+  maxTokens = 700,
+  timeoutMs = 45_000,
+): Promise<string> {
+  const cfg = resolveProvider();
+  if (!cfg) throw new Error('Kein KI-Provider konfiguriert (DEEPSEEK_API_KEY fehlt).');
+  if (cfg.name === 'gemini') {
+    const transcript = messages
+      .map((m) => `${m.role === 'system' ? 'ANWEISUNG' : m.role === 'user' ? 'FRAGE' : 'ANTWORT'}: ${m.content}`)
+      .join('\n\n');
+    return callGemini(cfg, transcript, timeoutMs, temperature);
+  }
+  const resp = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+    body: JSON.stringify({ model: cfg.model, messages, temperature, max_tokens: maxTokens }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!resp.ok) throw new Error(`${cfg.name} HTTP ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  const data = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content?.trim()) throw new Error(`${cfg.name}: leere Antwort`);
+  return content.trim();
+}
+
+const CHAT_SYSTEM_PROMPT = `Du bist Koch-Assistent in einer Rezept-App und beantwortest Fragen zu genau einem Rezept.
+
+REGELN
+1. Antworte auf Deutsch, in der du-Form, kurz und konkret: 2 bis 5 Sätze, mit Mengen und Einheiten.
+2. Beziehe dich nur auf das Rezept und das Kochen dazu. Bei Fragen zu anderen Themen antworte in einem Satz, dass du nur zu diesem Rezept hilfst.
+3. Fragt jemand nach einem Ersatz: nenne konkret das Ersatzprodukt mit Menge und was sich dadurch ändert (Geschmack, Konsistenz, Garzeit, grob die Nährwerte).
+4. Bei Umrechnungen (Brühe-Pulver auf Wasser, Gewürz-Ersatz, Portionsgrößen) nenne das Verhältnis und die konkrete Menge für dieses Rezept.
+5. Erfinde nichts: was nicht in der Zutatenliste steht, ist nicht drin. Bei Allergiefragen verweise auf die Zutatenliste, statt eine Garantie zu geben.
+6. Kein Markdown, keine Tabellen, keine Aufzählungszeichen, kein JSON — nur Fließtext.`;
+
+/**
+ * Rezept-Chat: beantwortet Fragen zu einem Rezept.
+ * Bewusst zustandslos — der Verlauf kommt vom Client und wird nicht gespeichert.
+ */
+aiRouter.post('/recipe-chat', async (req: AuthRequest, res) => {
+  const body = req.body as {
+    recipe?: {
+      title?: string;
+      description?: string;
+      servings?: number;
+      ingredients?: Array<{ name?: string; amount?: number | null; unit?: string }>;
+      steps?: unknown;
+      nutrition?: Record<string, number>;
+      tags?: string[];
+    };
+    history?: Array<{ role?: string; content?: string }>;
+    question?: string;
+  };
+
+  const question = String(body.question ?? '').trim().slice(0, 600);
+  if (question.length < 2) {
+    fail(res, 400, 'invalid-input', 'Bitte eine Frage eingeben.');
+    return;
+  }
+  const r = body.recipe ?? {};
+  const ingredients = (r.ingredients ?? [])
+    .map((i) => `${i.amount != null ? `${i.amount} ${String(i.unit ?? '').trim()}` : ''} ${String(i.name ?? '').trim()}`.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 40);
+  if (!ingredients.length) {
+    fail(res, 400, 'invalid-input', 'Zu diesem Rezept fehlen die Zutaten.');
+    return;
+  }
+  const steps = (Array.isArray(r.steps) ? r.steps : [])
+    .map((s, i) => `${i + 1}. ${typeof s === 'string' ? s : String((s as { text?: string })?.text ?? '')}`)
+    .slice(0, 20)
+    .join('\n');
+  const nutrition = r.nutrition
+    ? `pro Portion: ${r.nutrition.kcal ?? '?'} kcal, ${r.nutrition.protein ?? '?'} g Protein, ${r.nutrition.carbs ?? '?'} g Kohlenhydrate, ${r.nutrition.fat ?? '?'} g Fett`
+    : 'unbekannt';
+
+  const recipeText = [
+    `REZEPT: ${String(r.title ?? 'ohne Titel')}`,
+    r.description ? `Beschreibung: ${String(r.description)}` : '',
+    `Portionen: ${Number(r.servings ?? 2)}`,
+    `Nährwerte ${nutrition}`,
+    'ZUTATEN:',
+    ...ingredients.map((line) => `- ${line}`),
+    'ZUBEREITUNG:',
+    steps,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const history = (Array.isArray(body.history) ? body.history : [])
+    .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string')
+    .slice(-8)
+    .map((m) => ({ role: m.role as 'user' | 'assistant', content: String(m.content).slice(0, 1500) }));
+
+  const started = Date.now();
+  try {
+    const answer = await callChatText(
+      [
+        { role: 'system', content: CHAT_SYSTEM_PROMPT },
+        { role: 'user', content: recipeText },
+        ...history,
+        { role: 'user', content: question },
+      ],
+      0.4,
+      700,
+      45_000,
+    );
+    await logRun(req.userId!, 'recipe-chat', true, started);
+    res.json({ answer });
+  } catch (e) {
+    await logRun(req.userId!, 'recipe-chat', false, started, e instanceof Error ? e.message : String(e));
+    fail(res, 502, 'ai-failed', e instanceof Error ? e.message : 'Antwort fehlgeschlagen.');
+  }
+});
+
 const nutritionEstimateSchema = z.object({
   kcal: z.number().nonnegative().max(20000),
   protein: z.number().nonnegative().max(2000),

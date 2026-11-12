@@ -23,6 +23,7 @@ import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import { navigate } from '../App';
 import { RecipeEditor, emptyRecipeDraft } from '../components/RecipeEditor';
+import { RecipeChatCard } from '../components/RecipeChatCard';
 import { Modal } from '../components/Modal';
 import type { Recipe, RecipeComment, RecipeDraft } from '../lib/types';
 
@@ -466,6 +467,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
 
             {/* Seitenspalte */}
             <div className="space-y-4">
+              <RecipeChatCard recipe={recipe} />
               <div className="card p-5">
                 <p className="label">Deine Bewertung</p>
                 <div className="flex items-center gap-1">
