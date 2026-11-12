@@ -155,9 +155,12 @@ body {
 [data-theme='dark'] .text-amber-600 {
   color: #f5b354;
 }
+[data-theme='dark'] .text-ink\/85,
 [data-theme='dark'] .text-ink\/80 {
-  color: rgb(230 238 233 / 0.82);
+  color: rgb(230 238 233 / 0.85);
 }
+[data-theme='dark'] .text-ink\/70,
+[data-theme='dark'] .text-ink\/65,
 [data-theme='dark'] .text-ink\/60,
 [data-theme='dark'] .text-ink\/55,
 [data-theme='dark'] .text-ink\/50 {
@@ -168,8 +171,9 @@ body {
 [data-theme='dark'] .text-ink\/35 {
   color: rgb(230 238 233 / 0.45);
 }
+[data-theme='dark'] .text-ink\/30,
 [data-theme='dark'] .text-ink\/25 {
-  color: rgb(230 238 233 / 0.28);
+  color: rgb(230 238 233 / 0.34);
 }
 [data-theme='dark'] .text-leaf {
   color: #6dd39f;

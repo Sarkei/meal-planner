@@ -70,7 +70,7 @@ export function RecipeChatCard({ recipe }: { recipe: Recipe }) {
           <p className="label !mb-0 flex items-center gap-1.5">
             <MessageCircleQuestion className="h-3.5 w-3.5" /> Frag zum Rezept
           </p>
-          <p className="mt-1 text-[11px] text-ink/45">Nur in dieser Sitzung — nichts wird gespeichert.</p>
+          <p className="mt-1 text-[11px] text-ink/55">Nur in dieser Sitzung — nichts wird gespeichert.</p>
         </div>
         {messages.length > 0 && (
           <button
@@ -113,7 +113,7 @@ export function RecipeChatCard({ recipe }: { recipe: Recipe }) {
             <button
               key={s}
               type="button"
-              className="flex w-full items-center gap-1.5 rounded-lg border border-ink/10 px-2 py-1.5 text-left text-[12px] text-ink/70 hover:bg-sage/10"
+              className="flex w-full items-center gap-1.5 rounded-lg border border-ink/15 bg-ink/5 px-2 py-1.5 text-left text-[12px] font-medium text-ink hover:bg-sage/15"
               onClick={() => void ask(s)}
             >
               <Sparkles className="h-3 w-3 shrink-0 text-ink/35" /> {s}
