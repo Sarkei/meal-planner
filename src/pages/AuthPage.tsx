@@ -8,6 +8,8 @@ type Mode = 'login' | 'register' | 'forgot';
 export function AuthPage() {
   const { login, register } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
+  // Auf der Demo-Domain gibt es keine Registrierung — sonst wäre der Weg in die echte App sichtbar.
+  const isDemoHost = typeof location !== 'undefined' && location.hostname.startsWith('demo-');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,6 +70,7 @@ export function AuthPage() {
                 >
                   Anmelden
                 </button>
+                {!isDemoHost && (
                 <button
                   type="button"
                   onClick={() => switchMode('register')}
@@ -77,6 +80,7 @@ export function AuthPage() {
                 >
                   Registrieren
                 </button>
+                )}
               </div>
             ) : (
               <button
