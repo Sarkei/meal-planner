@@ -110,8 +110,6 @@ export function AppShell({
       </header>
 
       <main>{children}</main>
-
-      {footer ? <footer className="app-footer">{footer}</footer> : null}
     </div>
   );
 }
