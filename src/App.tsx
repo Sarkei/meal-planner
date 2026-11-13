@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './lib/auth';
 import { AuthPage } from './pages/AuthPage';
+import { OverviewPage } from './pages/OverviewPage';
 import { WeekPage } from './pages/WeekPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
@@ -9,7 +10,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ShoppingPage } from './pages/ShoppingPage';
 import { ChatPage } from './pages/ChatPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { CalendarDays, BookOpen, Users, Settings, CookingPot, ShoppingBasket, Sparkles } from 'lucide-react';
+import { CookingPot } from 'lucide-react';
+import { AppShell } from './components/AppShell';
 
 export type Route = { name: string; id?: string; params: URLSearchParams };
 
@@ -17,7 +19,7 @@ function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '');
   const [path, query] = raw.split('?');
   const [name, id] = path.split('/');
-  return { name: name || 'week', id, params: new URLSearchParams(query ?? '') };
+  return { name: name || 'home', id, params: new URLSearchParams(query ?? '') };
 }
 
 export function navigate(path: string): void {
@@ -34,18 +36,25 @@ function useRoute(): Route {
   return route;
 }
 
+/** Bereiche der App — höchstens sieben, damit die Kopfzeile ruhig bleibt. */
 const NAV = [
-  { id: 'week', label: 'Woche', icon: CalendarDays },
-  { id: 'chat', label: 'Assistent', icon: Sparkles },
-  { id: 'recipes', label: 'Rezepte', icon: BookOpen },
-  { id: 'shopping', label: 'Einkauf', icon: ShoppingBasket },
-  { id: 'household', label: 'Haushalt', icon: Users },
-  { id: 'settings', label: 'Profil', icon: Settings },
+  { id: 'home', label: 'Übersicht' },
+  { id: 'week', label: 'Woche' },
+  { id: 'chat', label: 'Assistent' },
+  { id: 'recipes', label: 'Rezepte' },
+  { id: 'shopping', label: 'Einkauf' },
+  { id: 'household', label: 'Haushalt' },
+  { id: 'settings', label: 'Profil' },
 ];
 
 export function App() {
-  const { user, loading, activeHousehold, households, selectHousehold, logout } = useAuth();
+  const { user, loading, activeHousehold, households, selectHousehold, logout, settings, applyTheme } = useAuth();
   const route = useRoute();
+  const [isDark, setIsDark] = useState(() => document.documentElement.dataset.theme === 'dark');
+
+  useEffect(() => {
+    setIsDark(document.documentElement.dataset.theme === 'dark');
+  }, [settings.theme]);
 
   if (route.name === 'reset') {
     const token = route.params.get('token') ?? '';
@@ -54,9 +63,11 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="flex items-center gap-3 text-sm font-medium text-ink/60">
-          <CookingPot className="h-5 w-5 animate-pulse" /> Wird geladen …
+      <div className="app flex min-h-screen items-center justify-center">
+        <div className="app-container flex items-center justify-center">
+          <div className="flex items-center gap-3 text-sm font-medium text-muted">
+            <CookingPot className="h-5 w-5 animate-pulse" /> Wird geladen …
+          </div>
         </div>
       </div>
     );
@@ -66,6 +77,8 @@ export function App() {
 
   const page = (() => {
     switch (route.name) {
+      case 'home':
+        return <OverviewPage />;
       case 'chat':
         return <ChatPage />;
       case 'recipes':
@@ -83,78 +96,74 @@ export function App() {
     }
   })();
 
+  const activeId = route.name === 'recipe' ? 'recipes' : route.name;
+  const activeLabel = NAV.find((item) => item.id === activeId)?.label ?? 'Woche';
+
+  const householdSelect =
+    households.length > 1 ? (
+      <select
+        className="select max-w-[220px]"
+        value={activeHousehold?.id ?? ''}
+        onChange={(e) => selectHousehold(e.target.value)}
+        aria-label="Haushalt wählen"
+      >
+        {households.map((h) => (
+          <option key={h.id} value={h.id}>
+            {h.name}
+          </option>
+        ))}
+      </select>
+    ) : null;
+
+  const logoutButton = (
+    <button className="btn btn-ghost btn-sm text-xs" onClick={logout}>
+      Abmelden
+    </button>
+  );
+
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-24 pt-5 sm:px-6 lg:pb-10">
-      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-leaf text-on-accent shadow-sm">
-            <CookingPot className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl leading-none font-bold tracking-tight">Meal Planner</h1>
-            <p className="mt-1 text-xs text-ink/55">
-              Hallo {user.displayName.split(' ')[0]} — gemeinsam planen, besser essen.
-            </p>
-          </div>
+    <AppShell
+      name="Meal Planner"
+      subtitle={activeLabel}
+      mark={<CookingPot className="h-5 w-5" aria-hidden />}
+      items={NAV}
+      active={activeId}
+      onNavigate={navigate}
+      theme={isDark ? 'dark' : 'light'}
+      onToggleTheme={() => {
+        const next = isDark ? 'light' : 'dark';
+        applyTheme(next);
+        setIsDark(next === 'dark');
+      }}
+      actions={
+        <div className="hidden items-center gap-2 md:flex">
+          {householdSelect}
+          {logoutButton}
         </div>
-        <div className="flex items-center gap-2">
-          {households.length > 1 && (
-            <select
-              className="select max-w-[220px]"
-              value={activeHousehold?.id ?? ''}
-              onChange={(e) => selectHousehold(e.target.value)}
-              aria-label="Haushalt wählen"
-            >
-              {households.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button className="btn btn-ghost btn-sm text-xs" onClick={logout}>
+      }
+      mobileExtra={
+        <div className="flex flex-col gap-2">
+          {householdSelect}
+          <button className="btn btn-ghost justify-start" onClick={logout}>
             Abmelden
           </button>
         </div>
-      </header>
-
-      <nav className="mb-5 hidden gap-1 rounded-2xl border border-ink/10 bg-surface/70 p-1 sm:flex">
-        {NAV.map(({ id, label, icon: Icon }) => {
-          const active = route.name === id || (id === 'recipes' && route.name === 'recipe');
-          return (
-            <button
-              key={id}
-              onClick={() => navigate(id)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                active ? 'bg-leaf text-on-accent shadow-sm' : 'text-ink/60 hover:bg-ink/5'
-              }`}
-            >
-              <Icon className="h-4 w-4" /> {label}
-            </button>
-          );
-        })}
-      </nav>
-
-      <main className="flex-1">{page}</main>
-
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-surface/95 backdrop-blur sm:hidden">
-        <div className="mx-auto flex max-w-md">
-          {NAV.map(({ id, label, icon: Icon }) => {
-            const active = route.name === id || (id === 'recipes' && route.name === 'recipe');
-            return (
-              <button
-                key={id}
-                onClick={() => navigate(id)}
-                className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-bold uppercase tracking-wide ${
-                  active ? 'text-leaf' : 'text-ink/45'
-                }`}
-              >
-                <Icon className="h-5 w-5" /> {label}
-              </button>
-            );
-          })}
+      }
+      footer={
+        <div className="app-container flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Meal Planner · {user.displayName}
+            {activeHousehold ? ` · ${activeHousehold.name}` : ''}
+          </span>
+          <span>Gemeinsam planen, besser essen.</span>
         </div>
-      </nav>
-    </div>
+      }
+    >
+      {route.name === 'home' ? (
+        page
+      ) : (
+        <div className="app-container pb-16 pt-6">{page}</div>
+      )}
+    </AppShell>
   );
 }

@@ -46,30 +46,17 @@ export function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-ink/10 bg-surface shadow-sm">
-        <div className="grid md:grid-cols-2">
-          <div className="hidden flex-col justify-between bg-leaf p-8 text-on-accent md:flex">
-            <div className="flex items-center gap-3">
-              <CookingPot className="h-7 w-7" />
-              <span className="font-display text-xl font-bold">Meal Planner</span>
-            </div>
-            <div className="space-y-4">
-              <h2 className="font-display text-3xl leading-tight font-bold">
-                Die Woche essen,
-                <br /> nicht verplanen.
-              </h2>
-              <ul className="space-y-2 text-sm text-on-accent/85">
-                <li>• Gemeinsame Rezeptsammlung — nichts geht verloren</li>
-                <li>• Wochenpläne im Haushalt, Einkaufsliste auf Knopfdruck</li>
-                <li>• KI erstellt Rezepte aus einer Idee</li>
-                <li>• Favoriten, Bewertungen und Notizen</li>
-              </ul>
-            </div>
-            <p className="text-xs text-on-accent/60">Selbst gehostet — deine Daten bleiben bei dir.</p>
-          </div>
+    <div className="app flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      <div className="w-full max-w-[420px]">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <span className="app-brand__mark h-12 w-12">
+            <CookingPot className="h-6 w-6" aria-hidden />
+          </span>
+          <span className="mt-3 font-display text-xl leading-tight text-ink">Meal Planner</span>
+          <span className="app-label mt-1">Gemeinsam planen</span>
+        </div>
 
-          <div className="p-7 sm:p-9">
+        <div className="app-card p-6 sm:p-7">
             {mode !== 'forgot' ? (
               <div className="mb-6 flex gap-2 rounded-xl bg-ink/5 p-1">
                 <button
@@ -190,13 +177,13 @@ export function AuthPage() {
               </button>
             )}
 
-            <p className="mt-5 text-xs leading-relaxed text-ink/50">
+            <p className="mt-5 text-xs leading-relaxed text-muted">
               Nach der Registrierung legst du im Tab „Haushalt" einen eigenen an oder trittst mit einem Einladungscode
               bei. Alle Rezepte der Sammlung sind für alle sichtbar.
             </p>
-          </div>
         </div>
       </div>
+      <p className="mt-6 text-center text-xs text-muted">Selbst gehostet — deine Daten bleiben bei dir.</p>
     </div>
   );
 }

@@ -18,6 +18,18 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Essen" />
     <title>Meal Planner</title>
+    <script>
+      /* Theme vor dem ersten Rendern setzen — kein Aufblitzen im Dunkelmodus */
+      (function () {
+        try {
+          var t = localStorage.getItem('mealplanner.theme');
+          var dark =
+            t === 'dark' ||
+            ((t === null || t === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
