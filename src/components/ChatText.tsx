@@ -12,7 +12,7 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
     const token = match[0];
     const key = `${keyPrefix}-${index++}`;
     if (token.startsWith('**')) nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
-    else if (token.startsWith('`')) nodes.push(<code key={key} className="rounded bg-black/5 px-1 py-0.5 text-[0.9em]">{token.slice(1, -1)}</code>);
+    else if (token.startsWith('`')) nodes.push(<code key={key} className="rounded bg-ink/5 px-1 py-0.5 text-[0.9em]">{token.slice(1, -1)}</code>);
     else nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
     last = match.index + token.length;
   }

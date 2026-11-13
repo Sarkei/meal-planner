@@ -30,7 +30,7 @@ export function RecipeCard({
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-ink/55">
         {recipe.rating != null && (
-          <span className="inline-flex items-center gap-1 font-semibold text-amber-600">
+          <span className="inline-flex items-center gap-1 font-semibold text-warn">
             <Star className="h-3.5 w-3.5 fill-current" /> {recipe.rating.toFixed(1)}
             <span className="font-normal text-ink/40">({recipe.ratingCount})</span>
           </span>

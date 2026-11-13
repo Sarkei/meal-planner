@@ -207,7 +207,7 @@ export function RecipesPage() {
         </button>
       </div>
 
-      <div className="flex gap-1 rounded-2xl border border-ink/10 bg-white/70 p-1 text-sm font-semibold">
+      <div className="flex gap-1 rounded-2xl border border-ink/10 bg-surface/70 p-1 text-sm font-semibold">
         {[
           { id: 'all' as Tab, label: 'Alle', icon: BookOpen },
           { id: 'favorites' as Tab, label: 'Favoriten', icon: Heart },
@@ -217,7 +217,7 @@ export function RecipesPage() {
             key={id}
             onClick={() => setTab(id)}
             className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 transition ${
-              tab === id ? 'bg-leaf text-white shadow-sm' : 'text-ink/60 hover:bg-ink/5'
+              tab === id ? 'bg-leaf text-on-accent shadow-sm' : 'text-ink/60 hover:bg-ink/5'
             }`}
           >
             <Icon className="h-4 w-4" /> {label}
@@ -259,7 +259,7 @@ export function RecipesPage() {
               <button
                 onClick={() => setDiets([])}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                  diets.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                  diets.length === 0 ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                 }`}
               >
                 Egal
@@ -270,7 +270,7 @@ export function RecipesPage() {
                   onClick={() => setDiets((prev) => toggleIn(prev, option))}
                   className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                     diets.includes(option)
-                      ? 'border-leaf bg-leaf text-white'
+                      ? 'border-leaf bg-leaf text-on-accent'
                       : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                   }`}
                 >
@@ -286,7 +286,7 @@ export function RecipesPage() {
               <button
                 onClick={() => setCuisines([])}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                  cuisines.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                  cuisines.length === 0 ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                 }`}
               >
                 Egal
@@ -297,7 +297,7 @@ export function RecipesPage() {
                   onClick={() => setCuisines((prev) => toggleIn(prev, option))}
                   className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                     cuisines.includes(option)
-                      ? 'border-leaf bg-leaf text-white'
+                      ? 'border-leaf bg-leaf text-on-accent'
                       : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                   }`}
                 >
@@ -314,7 +314,7 @@ export function RecipesPage() {
                 onClick={() => setExcludedAllergens([])}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                   excludedAllergens.length === 0
-                    ? 'border-leaf bg-leaf text-white'
+                    ? 'border-leaf bg-leaf text-on-accent'
                     : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                 }`}
               >
@@ -326,7 +326,7 @@ export function RecipesPage() {
                   onClick={() => setExcludedAllergens((prev) => toggleIn(prev, option, 14))}
                   className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                     excludedAllergens.includes(option)
-                      ? 'border-red-500 bg-red-500 text-white'
+                      ? 'border-danger bg-danger-soft0 text-on-accent'
                       : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                   }`}
                 >
@@ -346,7 +346,7 @@ export function RecipesPage() {
                     onClick={() => setMaxMinutes(option.value === '' ? '' : Number(option.value))}
                     className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                       String(maxMinutes) === option.value
-                        ? 'border-leaf bg-leaf text-white'
+                        ? 'border-leaf bg-leaf text-on-accent'
                         : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                     }`}
                   >
@@ -364,7 +364,7 @@ export function RecipesPage() {
                     onClick={() => setMaxKcal(option.value === '' ? '' : Number(option.value))}
                     className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                       String(maxKcal) === option.value
-                        ? 'border-leaf bg-leaf text-white'
+                        ? 'border-leaf bg-leaf text-on-accent'
                         : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                     }`}
                   >
@@ -415,7 +415,7 @@ export function RecipesPage() {
                     key={a.id}
                     onClick={() => setAuthorId(authorId === a.id ? null : a.id)}
                     className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                      authorId === a.id ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                      authorId === a.id ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                     }`}
                   >
                     {a.name} <span className="opacity-60">{a.count}</span>
@@ -434,7 +434,7 @@ export function RecipesPage() {
                     onClick={() => toggleTag(t.tag)}
                     className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                       tags.includes(t.tag)
-                        ? 'border-leaf bg-leaf text-white'
+                        ? 'border-leaf bg-leaf text-on-accent'
                         : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                     }`}
                   >
@@ -450,7 +450,7 @@ export function RecipesPage() {
               householdPrefs.allergies.length > 0 ||
               householdPrefs.maxMinutes != null) && (
               <button
-                className="btn btn-ghost !px-2 !py-1 text-[11px]"
+                className="btn btn-ghost btn-sm text-[11px]"
                 onClick={applyHouseholdPrefs}
                 title="Ernährungsform, Küche, Allergien und Zeitvorgabe des Haushalts übernehmen"
               >
@@ -458,7 +458,7 @@ export function RecipesPage() {
               </button>
             )}
           {activeFilters > 0 && (
-            <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={resetFilters}>
+            <button className="btn btn-ghost btn-sm text-[11px]" onClick={resetFilters}>
               <X className="h-3 w-3" /> Filter zurücksetzen
             </button>
           )}
@@ -474,7 +474,7 @@ export function RecipesPage() {
         </span>
       </div>
 
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
 
       {loading ? (
         <div className="card flex items-center justify-center gap-2 p-10 text-sm text-ink/50">
@@ -665,7 +665,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 rounded-lg py-1.5 transition ${tab === t.id ? 'bg-white shadow-sm' : 'text-ink/55'}`}
+            className={`flex-1 rounded-lg py-1.5 transition ${tab === t.id ? 'bg-surface shadow-sm' : 'text-ink/55'}`}
           >
             {t.label}
           </button>
@@ -711,7 +711,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {busy ? 'Rezept wird geschrieben …' : 'Erstellen und zu Favoriten'}
           </button>
-          {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+          {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
         </div>
       ) : tab === 'scan' ? (
         <div className="space-y-3">
@@ -748,7 +748,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
               inputMode="numeric"
             />
             <button
-              className="btn btn-ghost !px-3 !py-2 text-[12px]"
+              className="btn btn-ghost btn-sm text-[12px]"
               onClick={() => {
                 const code = scanCode.replace(/[^0-9]/g, '');
                 if (code.length >= 6) {
@@ -768,7 +768,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
           ) : (
             <ul className="space-y-2">
               {items.map((item, index) => (
-                <li key={item.barcode + index} className="rounded-xl border border-ink/10 bg-white/70 p-2">
+                <li key={item.barcode + index} className="rounded-xl border border-ink/10 bg-surface/70 p-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-semibold">{item.name}</p>
@@ -777,7 +777,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
                       </p>
                     </div>
                     <button
-                      className="btn btn-ghost !px-2 !py-1 text-[11px] text-red-600"
+                      className="btn btn-ghost btn-sm text-[11px] text-danger"
                       onClick={() => setItems(items.filter((_, i) => i !== index))}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -851,7 +851,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
             </div>
           )}
 
-          {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+          {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
 
           {scanOpen && (
             <BarcodeScanner

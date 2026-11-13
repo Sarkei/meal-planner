@@ -48,7 +48,7 @@ function ChipGroup({ label, hint, options, selected, emptyLabel, onToggle, onCle
         <button
           onClick={onClear}
           className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-            selected.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+            selected.length === 0 ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
           }`}
         >
           {emptyLabel}
@@ -60,7 +60,7 @@ function ChipGroup({ label, hint, options, selected, emptyLabel, onToggle, onCle
               key={option}
               onClick={() => onToggle(option)}
               className={`ui-mark-selected rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                active ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
               }`}
             >
               {option}
@@ -182,7 +182,7 @@ export function HouseholdPage() {
           </p>
         </div>
 
-        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+        {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="card space-y-3 p-5">
@@ -308,11 +308,11 @@ export function HouseholdPage() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-leaf/70">Einladungscode</p>
             <p className="font-display text-2xl font-bold tracking-[0.18em] text-leaf">{activeHousehold.inviteCode}</p>
             <div className="mt-2 flex items-center justify-center gap-2">
-              <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => void copyCode()}>
+              <button className="btn btn-ghost btn-sm text-[11px]" onClick={() => void copyCode()}>
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Kopiert' : 'Kopieren'}
               </button>
               {isOwner && (
-                <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => void rotateCode()} disabled={busy}>
+                <button className="btn btn-ghost btn-sm text-[11px]" onClick={() => void rotateCode()} disabled={busy}>
                   <RefreshCw className="h-3.5 w-3.5" /> Neu
                 </button>
               )}
@@ -324,7 +324,7 @@ export function HouseholdPage() {
         </p>
       </div>
 
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
       {info && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm font-medium text-leaf">{info}</p>}
 
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -384,7 +384,7 @@ export function HouseholdPage() {
                         void savePrefs({ planDays: next.length ? next : [index] });
                       }}
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                        active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                        active ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
                       }`}
                     >
                       {day.slice(0, 2)}
@@ -412,7 +412,7 @@ export function HouseholdPage() {
                         void savePrefs({ planSlots: next.length ? next : [slot.id] });
                       }}
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                        active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                        active ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
                       }`}
                     >
                       {slot.label}
@@ -565,7 +565,7 @@ export function HouseholdPage() {
                   <span className="chip">{m.role === 'owner' ? 'Besitzer' : 'Mitglied'}</span>
                   {isOwner && m.role !== 'owner' && (
                     <button
-                      className="rounded-lg p-1.5 text-ink/35 hover:bg-red-50 hover:text-clay"
+                      className="rounded-lg p-1.5 text-ink/35 hover:bg-danger-soft hover:text-clay"
                       onClick={() => void removeMember(m)}
                       aria-label="Mitglied entfernen"
                     >

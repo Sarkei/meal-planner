@@ -160,7 +160,7 @@ export function ShoppingPage() {
             <button className="rounded-lg p-1.5 hover:bg-ink/5" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Nächste Woche">
               <ChevronRight className="h-4 w-4" />
             </button>
-            <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => setWeekStart(mondayOf(new Date()))}>
+            <button className="btn btn-ghost btn-sm text-[11px]" onClick={() => setWeekStart(mondayOf(new Date()))}>
               Diese Woche
             </button>
           </div>
@@ -172,7 +172,7 @@ export function ShoppingPage() {
             </span>
           )}
           {list && list.items.some((i) => i.checked) && (
-            <button className="btn btn-ghost !px-2 !py-1.5 text-xs" onClick={() => void resetChecked()}>
+            <button className="btn btn-ghost btn-sm text-xs" onClick={() => void resetChecked()}>
               <RotateCcw className="h-3.5 w-3.5" /> Erledigte zurücksetzen
             </button>
           )}
@@ -197,7 +197,7 @@ export function ShoppingPage() {
         Die KI sortiert neue Artikel selbst ein (Obst & Gemüse, Milchprodukte, Vorrat, Gewürze, Haushalt …).
       </p>
 
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
 
       {loading ? (
         <div className="card flex items-center justify-center gap-2 p-10 text-sm text-ink/50">
@@ -224,7 +224,7 @@ export function ShoppingPage() {
                       <button
                         onClick={() => void toggle(item)}
                         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                          item.checked ? 'border-leaf bg-leaf text-white' : 'border-ink/25'
+                          item.checked ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/25'
                         }`}
                         aria-label={item.checked ? 'Als offen markieren' : 'Als erledigt markieren'}
                       >
@@ -240,7 +240,7 @@ export function ShoppingPage() {
                       </span>
                       {item.source === 'manual' && (
                         <button
-                          className="rounded-lg p-1 text-ink/25 hover:bg-red-50 hover:text-clay"
+                          className="rounded-lg p-1 text-ink/25 hover:bg-danger-soft hover:text-clay"
                           onClick={() => void removeItem(item)}
                           aria-label="Artikel entfernen"
                         >

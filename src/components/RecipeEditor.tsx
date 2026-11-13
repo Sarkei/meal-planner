@@ -215,7 +215,7 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
       <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="label !mb-0">Zutaten</p>
-          <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => addIngredient(true)}>
+          <button className="btn btn-ghost btn-sm text-[11px]" onClick={() => addIngredient(true)}>
             <Plus className="h-3 w-3" /> Zutat
           </button>
         </div>
@@ -271,7 +271,7 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
                 )}
               </select>
               <button
-                className="rounded-lg p-1.5 text-ink/30 hover:bg-red-50 hover:text-clay"
+                className="rounded-lg p-1.5 text-ink/30 hover:bg-danger-soft hover:text-clay"
                 onClick={() => set('ingredients', value.ingredients.filter((_, idx) => idx !== i))}
                 aria-label="Zutat entfernen"
               >
@@ -287,7 +287,7 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
       <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="label !mb-0">Zubereitung</p>
-          <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => addStep(true)}>
+          <button className="btn btn-ghost btn-sm text-[11px]" onClick={() => addStep(true)}>
             <Plus className="h-3 w-3" /> Schritt
           </button>
         </div>
@@ -307,7 +307,7 @@ export function RecipeEditor({ value, onChange }: { value: RecipeDraft; onChange
                 />
               </div>
               <button
-                className="mt-1 rounded-lg p-1.5 text-ink/30 hover:bg-red-50 hover:text-clay"
+                className="mt-1 rounded-lg p-1.5 text-ink/30 hover:bg-danger-soft hover:text-clay"
                 onClick={() => set('steps', value.steps.filter((_, idx) => idx !== i))}
                 aria-label="Schritt entfernen"
               >

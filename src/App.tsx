@@ -87,7 +87,7 @@ export function App() {
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-24 pt-5 sm:px-6 lg:pb-10">
       <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-leaf text-white shadow-sm">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-leaf text-on-accent shadow-sm">
             <CookingPot className="h-6 w-6" />
           </div>
           <div>
@@ -112,13 +112,13 @@ export function App() {
               ))}
             </select>
           )}
-          <button className="btn btn-ghost !px-3 !py-2 text-xs" onClick={logout}>
+          <button className="btn btn-ghost btn-sm text-xs" onClick={logout}>
             Abmelden
           </button>
         </div>
       </header>
 
-      <nav className="mb-5 hidden gap-1 rounded-2xl border border-ink/10 bg-white/70 p-1 sm:flex">
+      <nav className="mb-5 hidden gap-1 rounded-2xl border border-ink/10 bg-surface/70 p-1 sm:flex">
         {NAV.map(({ id, label, icon: Icon }) => {
           const active = route.name === id || (id === 'recipes' && route.name === 'recipe');
           return (
@@ -126,7 +126,7 @@ export function App() {
               key={id}
               onClick={() => navigate(id)}
               className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                active ? 'bg-leaf text-white shadow-sm' : 'text-ink/60 hover:bg-ink/5'
+                active ? 'bg-leaf text-on-accent shadow-sm' : 'text-ink/60 hover:bg-ink/5'
               }`}
             >
               <Icon className="h-4 w-4" /> {label}
@@ -137,7 +137,7 @@ export function App() {
 
       <main className="flex-1">{page}</main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 backdrop-blur sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-surface/95 backdrop-blur sm:hidden">
         <div className="mx-auto flex max-w-md">
           {NAV.map(({ id, label, icon: Icon }) => {
             const active = route.name === id || (id === 'recipes' && route.name === 'recipe');

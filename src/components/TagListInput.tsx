@@ -57,12 +57,12 @@ export function TagListInput({
           {value.map((item) => (
             <span
               key={item}
-              className="flex items-center gap-1 rounded-full border border-ink/15 bg-white/60 py-1 pl-3 pr-1.5 text-xs font-semibold text-ink/70"
+              className="flex items-center gap-1 rounded-full border border-ink/15 bg-surface/60 py-1 pl-3 pr-1.5 text-xs font-semibold text-ink/70"
             >
               {item}
               <button
                 type="button"
-                className="rounded-full p-0.5 text-ink/35 transition hover:bg-red-50 hover:text-clay"
+                className="rounded-full p-0.5 text-ink/35 transition hover:bg-danger-soft hover:text-clay"
                 onClick={() => onChange(value.filter((v) => v !== item))}
                 aria-label={`${item} entfernen`}
               >

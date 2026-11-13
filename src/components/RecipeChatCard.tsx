@@ -75,7 +75,7 @@ export function RecipeChatCard({ recipe }: { recipe: Recipe }) {
         {messages.length > 0 && (
           <button
             type="button"
-            className="btn btn-ghost !px-2 !py-1 text-[11px]"
+            className="btn btn-ghost btn-sm text-[11px]"
             onClick={() => {
               setMessages([]);
               setError(null);
@@ -138,7 +138,7 @@ export function RecipeChatCard({ recipe }: { recipe: Recipe }) {
         />
         <button
           type="button"
-          className="btn btn-primary !px-3 !py-2"
+          className="btn btn-primary btn-sm"
           onClick={() => void ask(draft)}
           disabled={busy || draft.trim().length < 2}
           aria-label="Frage senden"
@@ -147,7 +147,7 @@ export function RecipeChatCard({ recipe }: { recipe: Recipe }) {
         </button>
       </div>
 
-      {error && <p className="mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700">{error}</p>}
+      {error && <p className="mt-2 rounded-lg bg-danger-soft px-2 py-1.5 text-[11px] font-medium text-danger">{error}</p>}
     </div>
   );
 }

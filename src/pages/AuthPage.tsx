@@ -47,9 +47,9 @@ export function AuthPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-ink/10 bg-white shadow-xl">
+      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-ink/10 bg-surface shadow-sm">
         <div className="grid md:grid-cols-2">
-          <div className="hidden flex-col justify-between bg-leaf p-8 text-white md:flex">
+          <div className="hidden flex-col justify-between bg-leaf p-8 text-on-accent md:flex">
             <div className="flex items-center gap-3">
               <CookingPot className="h-7 w-7" />
               <span className="font-display text-xl font-bold">Meal Planner</span>
@@ -59,14 +59,14 @@ export function AuthPage() {
                 Die Woche essen,
                 <br /> nicht verplanen.
               </h2>
-              <ul className="space-y-2 text-sm text-white/85">
+              <ul className="space-y-2 text-sm text-on-accent/85">
                 <li>• Gemeinsame Rezeptsammlung — nichts geht verloren</li>
                 <li>• Wochenpläne im Haushalt, Einkaufsliste auf Knopfdruck</li>
                 <li>• KI erstellt Rezepte aus einer Idee</li>
                 <li>• Favoriten, Bewertungen und Notizen</li>
               </ul>
             </div>
-            <p className="text-xs text-white/60">Selbst gehostet — deine Daten bleiben bei dir.</p>
+            <p className="text-xs text-on-accent/60">Selbst gehostet — deine Daten bleiben bei dir.</p>
           </div>
 
           <div className="p-7 sm:p-9">
@@ -76,7 +76,7 @@ export function AuthPage() {
                   type="button"
                   onClick={() => switchMode('login')}
                   className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${
-                    mode === 'login' ? 'bg-white shadow-sm' : 'text-ink/55'
+                    mode === 'login' ? 'bg-surface shadow-sm' : 'text-ink/55'
                   }`}
                 >
                   Anmelden
@@ -85,7 +85,7 @@ export function AuthPage() {
                   type="button"
                   onClick={() => switchMode('register')}
                   className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${
-                    mode === 'register' ? 'bg-white shadow-sm' : 'text-ink/55'
+                    mode === 'register' ? 'bg-surface shadow-sm' : 'text-ink/55'
                   }`}
                 >
                   Registrieren
@@ -153,7 +153,7 @@ export function AuthPage() {
               )}
 
               {error && (
-                <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert">
+                <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger" role="alert">
                   {error}
                 </p>
               )}

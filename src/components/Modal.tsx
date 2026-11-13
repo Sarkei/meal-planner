@@ -31,7 +31,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div
-        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl ${
+        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-surface shadow-sm sm:rounded-2xl ${
           wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'
         }`}
       >

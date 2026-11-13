@@ -77,7 +77,7 @@ export function PlanWeekModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6" onClick={onClose}>
       <div
-        className="w-full max-w-md space-y-4 rounded-t-3xl border border-ink/10 bg-white p-5 sm:rounded-3xl"
+        className="w-full max-w-md space-y-4 rounded-t-2xl border border-ink/10 bg-surface p-5 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
@@ -113,7 +113,7 @@ export function PlanWeekModal({
                   key={day}
                   onClick={() => toggleDay(index)}
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                    active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                    active ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
                   }`}
                 >
                   {day.slice(0, 2)}
@@ -138,7 +138,7 @@ export function PlanWeekModal({
                   key={slot.id}
                   onClick={() => toggleSlot(slot.id)}
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                    active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
+                    active ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/55 hover:border-leaf/40'
                   }`}
                 >
                   {slot.label}
@@ -183,7 +183,7 @@ export function PlanWeekModal({
           </div>
         </div>
 
-        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
+        {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-xs font-semibold text-danger">{error}</p>}
 
         <button className="btn btn-primary w-full" onClick={() => void submit()} disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}

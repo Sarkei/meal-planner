@@ -104,7 +104,7 @@ export function FoodSearch({ onPick }: { onPick: (hit: FoodHit, grams: number) =
             inputMode="numeric"
           />
         </div>
-        <button type="button" className="btn btn-ghost !px-3 !py-2 text-[12px]" onClick={() => setScanning(true)}>
+        <button type="button" className="btn btn-ghost btn-sm text-[12px]" onClick={() => setScanning(true)}>
           <Camera className="h-4 w-4" /> Scannen
         </button>
       </div>
@@ -128,7 +128,7 @@ export function FoodSearch({ onPick }: { onPick: (hit: FoodHit, grams: number) =
             <span className="text-[12px] text-ink/55">g</span>
             <button
               type="button"
-              className="btn btn-primary !px-3 !py-1.5 text-[12px]"
+              className="btn btn-primary btn-sm text-[12px]"
               onClick={() => {
                 const hit = scanned;
                 if (!hit) return;
@@ -139,7 +139,7 @@ export function FoodSearch({ onPick }: { onPick: (hit: FoodHit, grams: number) =
             >
               Als Zutat übernehmen
             </button>
-            <button type="button" className="btn btn-ghost !px-2 !py-1.5 text-[12px]" onClick={() => setScanned(null)}>
+            <button type="button" className="btn btn-ghost btn-sm text-[12px]" onClick={() => setScanned(null)}>
               Verwerfen
             </button>
           </div>
@@ -147,7 +147,7 @@ export function FoodSearch({ onPick }: { onPick: (hit: FoodHit, grams: number) =
       )}
 
       {hits.length > 0 && (
-        <ul className="mt-2 max-h-56 overflow-auto rounded-lg border border-line/60 bg-white/70">
+        <ul className="mt-2 max-h-56 overflow-auto rounded-lg border border-line/60 bg-surface/70">
           {hits.map((hit) => (
             <li key={hit.barcode + hit.name}>
               <button

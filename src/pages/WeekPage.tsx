@@ -185,7 +185,7 @@ export function WeekPage() {
             <button className="rounded-lg p-1.5 hover:bg-ink/5" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Nächste Woche">
               <ChevronRight className="h-4 w-4" />
             </button>
-            <button className="btn btn-ghost !px-2 !py-1 text-[11px]" onClick={() => setWeekStart(mondayOf(new Date()))}>
+            <button className="btn btn-ghost btn-sm text-[11px]" onClick={() => setWeekStart(mondayOf(new Date()))}>
               Heute
             </button>
           </div>
@@ -206,9 +206,9 @@ export function WeekPage() {
         </div>
       </div>
 
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
       {confirmClear && (
-        <div className="card flex flex-col gap-3 border-red-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="card flex flex-col gap-3 border-danger/30 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium text-ink/70">
             Alle {plan?.entries.length ?? 0} Einträge dieser Woche entfernen? Die Rezepte bleiben in der Sammlung.
           </p>
@@ -216,7 +216,7 @@ export function WeekPage() {
             <button className="btn btn-ghost" onClick={() => setConfirmClear(false)} disabled={busy}>
               Abbrechen
             </button>
-            <button className="btn bg-clay text-white hover:bg-clay/90" onClick={() => void clearWeek()} disabled={busy}>
+            <button className="btn bg-clay text-on-accent hover:bg-clay/90" onClick={() => void clearWeek()} disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Woche leeren
             </button>
           </div>
@@ -318,7 +318,7 @@ export function WeekPage() {
                               e.stopPropagation();
                               handleDrop(dayIndex, dropTarget?.index ?? index);
                             }}
-                            className={`group flex items-center gap-2 rounded-xl border border-ink/10 bg-white px-2 py-2 transition ${
+                            className={`group flex items-center gap-2 rounded-xl border border-ink/10 bg-surface px-2 py-2 transition ${
                               isDragging ? 'opacity-40' : 'hover:border-leaf/40'
                             }`}
                           >
@@ -368,7 +368,7 @@ export function WeekPage() {
                             </div>
 
                             <button
-                              className="flex items-center gap-1 rounded-lg border border-ink/10 px-2 py-1.5 text-ink/55 transition hover:border-red-200 hover:bg-red-50 hover:text-clay disabled:opacity-40"
+                              className="flex items-center gap-1 rounded-lg border border-ink/10 px-2 py-1.5 text-ink/55 transition hover:border-danger/30 hover:bg-danger-soft hover:text-clay disabled:opacity-40"
                               onClick={() => void removeEntry(entry)}
                               disabled={busy}
                               aria-label="Aus dem Tag entfernen"
@@ -478,7 +478,7 @@ function DayPicker({
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 rounded-lg py-1.5 transition ${tab === t.id ? 'bg-white shadow-sm' : 'text-ink/55'}`}
+            className={`flex-1 rounded-lg py-1.5 transition ${tab === t.id ? 'bg-surface shadow-sm' : 'text-ink/55'}`}
           >
             {t.label}
           </button>
@@ -569,7 +569,7 @@ function DayPicker({
         </div>
       )}
 
-      {error && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="mt-3 rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
     </Modal>
   );
 }

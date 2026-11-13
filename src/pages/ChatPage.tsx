@@ -165,7 +165,7 @@ export function ChatPage() {
             <div
               className={
                 m.role === 'user'
-                  ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-leaf px-3.5 py-2.5 text-sm text-white'
+                  ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-leaf px-3.5 py-2.5 text-sm text-on-accent'
                   : 'max-w-[92%] space-y-2 rounded-2xl rounded-bl-sm bg-cream px-3.5 py-2.5 text-sm text-ink/85'
               }
             >
@@ -182,7 +182,7 @@ export function ChatPage() {
                     <li
                       key={`${a.tool}-${i}`}
                       className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        a.ok ? 'bg-leaf-soft text-leaf' : 'bg-red-50 text-clay'
+                        a.ok ? 'bg-leaf-soft text-leaf' : 'bg-danger-soft text-clay'
                       }`}
                       title={a.summary}
                     >
@@ -203,10 +203,10 @@ export function ChatPage() {
         )}
       </div>
 
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
 
       {/* Eingabe klebt unten wie in einem normalen Chat (mobil oberhalb der Tab-Leiste) */}
-      <div className="sticky bottom-[72px] z-20 rounded-2xl border border-ink/10 bg-white/95 p-2 shadow-sm backdrop-blur sm:bottom-2 sm:p-3">
+      <div className="sticky bottom-[72px] z-20 rounded-2xl border border-ink/10 bg-surface/95 p-2 shadow-sm backdrop-blur sm:bottom-2 sm:p-3">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}

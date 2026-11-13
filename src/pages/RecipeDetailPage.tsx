@@ -216,7 +216,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
   if (error && !recipe && !isNew) {
     return (
       <div className="card p-6">
-        <p className="text-sm font-medium text-red-700">{error}</p>
+        <p className="text-sm font-medium text-danger">{error}</p>
         <button className="btn btn-ghost mt-3" onClick={() => navigate('recipes')}>
           <ArrowLeft className="h-4 w-4" /> Zurück zur Sammlung
         </button>
@@ -229,14 +229,14 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button className="btn btn-ghost !px-2 !py-1.5 text-xs" onClick={() => navigate('recipes')}>
+        <button className="btn btn-ghost btn-sm text-xs" onClick={() => navigate('recipes')}>
           <ArrowLeft className="h-4 w-4" /> Sammlung
         </button>
         <div className="flex flex-wrap items-center gap-2">
           {recipe && !editing && (
             <>
               <button
-                className={`btn btn-ghost !px-2 !py-1.5 text-xs ${recipe.favorite ? '!text-clay' : ''}`}
+                className={`btn btn-ghost btn-sm text-xs ${recipe.favorite ? '!text-clay' : ''}`}
                 onClick={() => void toggleFavorite()}
               >
                 <Heart className={`h-4 w-4 ${recipe.favorite ? 'fill-current' : ''}`} />
@@ -244,14 +244,14 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
               </button>
               {isAuthor ? (
                 <>
-                  <button className="btn btn-ghost !px-2 !py-1.5 text-xs" onClick={() => setShowRefine(true)}>
+                  <button className="btn btn-ghost btn-sm text-xs" onClick={() => setShowRefine(true)}>
                     <Sparkles className="h-4 w-4" /> KI verfeinern
                   </button>
-                  <button className="btn btn-ghost !px-2 !py-1.5 text-xs" onClick={() => setEditing(true)}>
+                  <button className="btn btn-ghost btn-sm text-xs" onClick={() => setEditing(true)}>
                     <Pencil className="h-4 w-4" /> Bearbeiten
                   </button>
                   <button
-                    className="btn btn-ghost !px-2 !py-1.5 text-xs !text-clay"
+                    className="btn btn-ghost btn-sm text-xs !text-clay"
                     onClick={() => void archive()}
                     disabled={busy}
                   >
@@ -259,7 +259,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
                   </button>
                 </>
               ) : (
-                <button className="btn btn-ghost !px-2 !py-1.5 text-xs" onClick={() => void copyRecipe()} disabled={busy}>
+                <button className="btn btn-ghost btn-sm text-xs" onClick={() => void copyRecipe()} disabled={busy}>
                   <Copy className="h-4 w-4" /> Kopieren & anpassen
                 </button>
               )}
@@ -268,7 +268,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
         </div>
       </div>
 
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
       {notice && <p className="rounded-xl bg-leaf-soft px-3 py-2 text-sm font-medium text-leaf">{notice}</p>}
 
       {editing ? (
@@ -329,7 +329,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-ink/55">
-                    <span className="inline-flex items-center gap-1 font-semibold text-amber-600">
+                    <span className="inline-flex items-center gap-1 font-semibold text-warn">
                       <Star className="h-3.5 w-3.5 fill-current" />
                       {recipe.rating != null ? recipe.rating.toFixed(1) : '—'}
                       <span className="font-normal text-ink/40">({recipe.ratingCount})</span>
@@ -407,7 +407,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
                   <ol className="space-y-3">
                     {recipe.steps.map((step, i) => (
                       <li key={i} className="flex gap-3 text-sm leading-relaxed">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-leaf text-xs font-bold text-white">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-leaf text-xs font-bold text-on-accent">
                           {i + 1}
                         </span>
                         <span className="pt-1">{step}</span>
@@ -474,7 +474,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button key={n} onClick={() => void rate(n)} aria-label={`${n} Sterne`} className="p-0.5">
                       <Star
-                        className={`h-6 w-6 ${n <= (recipe.myRating ?? 0) ? 'fill-amber-500 text-amber-500' : 'text-ink/25 hover:text-amber-500'}`}
+                        className={`h-6 w-6 ${n <= (recipe.myRating ?? 0) ? 'fill-warn text-warn' : 'text-ink/25 hover:text-warn'}`}
                       />
                     </button>
                   ))}
@@ -587,7 +587,7 @@ function RefineModal({
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {busy ? 'Wird überarbeitet …' : 'Überarbeiten'}
         </button>
-        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+        {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
       </div>
     </Modal>
   );

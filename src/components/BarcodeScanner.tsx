@@ -81,13 +81,13 @@ export function BarcodeScanner({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/85 p-4 text-white">
+    <div className="fixed inset-0 z-50 flex flex-col bg-scrim p-4 text-on-scrim">
       <div className="mx-auto flex w-full max-w-md flex-col">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <ScanBarcode className="h-5 w-5" /> Barcode scannen
           </h2>
-          <button onClick={onClose} className="rounded-full bg-white/10 p-2" aria-label="Schließen">
+          <button onClick={onClose} className="rounded-full bg-on-scrim/10 p-2" aria-label="Schließen">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -95,21 +95,21 @@ export function BarcodeScanner({
         <div className="relative overflow-hidden rounded-2xl bg-black">
           <video ref={videoRef} className="h-64 w-full object-cover" playsInline muted />
           {!ready && !error && (
-            <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-white/80">
+            <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-on-scrim/80">
               <Loader2 className="h-4 w-4 animate-spin" /> Kamera startet …
             </div>
           )}
           {ready && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="h-28 w-72 rounded-xl border-2 border-white/70" />
+              <div className="h-28 w-72 rounded-xl border-2 border-on-scrim/70" />
             </div>
           )}
         </div>
 
-        <p className="mt-2 text-center text-xs text-white/70">
+        <p className="mt-2 text-center text-xs text-on-scrim/70">
           Barcode in den Rahmen halten – der Code wird automatisch übernommen.
         </p>
-        {error && <p className="mt-2 rounded-lg bg-amber-500/20 px-3 py-2 text-sm text-amber-200">{error}</p>}
+        {error && <p className="mt-2 rounded-lg border-l-2 border-warn bg-on-scrim/10 px-3 py-2 text-sm text-on-scrim">{error}</p>}
       </div>
     </div>
   );

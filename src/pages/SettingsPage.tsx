@@ -74,7 +74,7 @@ function MultiOptionRow({
         <button
           onClick={onClear}
           className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-            selected.length === 0 ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+            selected.length === 0 ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
           }`}
         >
           {emptyLabel}
@@ -86,7 +86,7 @@ function MultiOptionRow({
               key={option}
               onClick={() => onToggle(option)}
               className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                active ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
               } ${capitalize ? 'capitalize' : ''}`}
             >
               {option}
@@ -318,7 +318,7 @@ export function SettingsPage() {
                 onClick={() => void saveSettings({ allergies: [] })}
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   settings.allergies.length === 0
-                    ? 'border-leaf bg-leaf text-white'
+                    ? 'border-leaf bg-leaf text-on-accent'
                     : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                 }`}
               >
@@ -337,7 +337,7 @@ export function SettingsPage() {
                       })
                     }
                     className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                      active ? 'border-leaf bg-leaf text-white' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
+                      active ? 'border-leaf bg-leaf text-on-accent' : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                     }`}
                   >
                     {option}
@@ -396,7 +396,7 @@ export function SettingsPage() {
                     }
                     className={`ui-mark-selected rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                       active
-                        ? 'border-leaf bg-leaf text-white'
+                        ? 'border-leaf bg-leaf text-on-accent'
                         : 'border-ink/15 text-ink/60 hover:border-leaf/40'
                     }`}
                   >
@@ -456,7 +456,7 @@ export function SettingsPage() {
             />
             <div className="mt-2 flex items-center gap-3">
               <button
-                className="btn btn-ghost !px-3 !py-1.5 text-xs"
+                className="btn btn-ghost btn-sm text-xs"
                 onClick={() => void saveSettings({ specialWishes: wishes })}
                 disabled={wishes === settings.specialWishes}
               >
@@ -538,7 +538,7 @@ export function SettingsPage() {
           {pwBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Passwort speichern
         </button>
         {pwMsg && (
-          <p className={`text-xs font-semibold ${pwMsg.ok ? 'text-leaf' : 'text-red-600'}`}>{pwMsg.text}</p>
+          <p className={`text-xs font-semibold ${pwMsg.ok ? 'text-leaf' : 'text-danger'}`}>{pwMsg.text}</p>
         )}
       </div>
 
@@ -579,7 +579,7 @@ export function SettingsPage() {
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Konto löschen
           </button>
         </div>
-        {deleteError && <p className="text-xs font-semibold text-red-600">{deleteError}</p>}
+        {deleteError && <p className="text-xs font-semibold text-danger">{deleteError}</p>}
       </div>
     </div>
   );
