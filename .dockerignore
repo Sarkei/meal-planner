@@ -1,0 +1,8 @@
+node_modules
+dist
+server.js
+.git
+.env
+test-results
+tmp
+*.log
