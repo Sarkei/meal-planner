@@ -1,0 +1,223 @@
+import pg from 'pg';
+
+const { Pool } = pg;
+
+function buildPool(): pg.Pool {
+  const url = process.env.DATABASE_URL?.trim();
+  if (url) return new Pool({ connectionString: url });
+  return new Pool({
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: Number(process.env.POSTGRES_PORT || 5432),
+    database: process.env.POSTGRES_DB || 'mealplanner',
+    user: process.env.POSTGRES_USER || 'mealplanner',
+    password: process.env.POSTGRES_PASSWORD || 'mealplanner',
+    max: 10,
+  });
+}
+
+export const pool = buildPool();
+
+export async function initDb(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            serial PRIMARY KEY,
+      email         text NOT NULL UNIQUE,
+      password_hash text NOT NULL,
+      display_name  text NOT NULL,
+      created_at    timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS households (
+      id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name        text NOT NULL,
+      invite_code text NOT NULL UNIQUE,
+      created_by  integer REFERENCES users(id) ON DELETE SET NULL,
+      created_at  timestamptz NOT NULL DEFAULT now()
+    );
+
+    ALTER TABLE households ADD COLUMN IF NOT EXISTS preferences jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+    CREATE TABLE IF NOT EXISTS household_members (
+      household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+      user_id      integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role         text NOT NULL DEFAULT 'member',
+      joined_at    timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (household_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS recipes (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      household_id uuid REFERENCES households(id) ON DELETE CASCADE,
+      owner_id     integer REFERENCES users(id) ON DELETE SET NULL,
+      title        text NOT NULL,
+      description  text NOT NULL DEFAULT '',
+      servings     integer NOT NULL DEFAULT 2,
+      prep_minutes integer,
+      tags         text[] NOT NULL DEFAULT '{}',
+      source       text NOT NULL DEFAULT 'manual',
+      ingredients  jsonb NOT NULL DEFAULT '[]'::jsonb,
+      steps        jsonb NOT NULL DEFAULT '[]'::jsonb,
+      nutrition    jsonb NOT NULL DEFAULT '{}'::jsonb,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      updated_at   timestamptz NOT NULL DEFAULT now()
+    );
+
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS diets text[] NOT NULL DEFAULT '{}';
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS cuisines text[] NOT NULL DEFAULT '{}';
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS allergens text[] NOT NULL DEFAULT '{}';
+    CREATE INDEX IF NOT EXISTS recipes_diets_idx ON recipes USING gin (diets);
+    CREATE INDEX IF NOT EXISTS recipes_cuisines_idx ON recipes USING gin (cuisines);
+    CREATE INDEX IF NOT EXISTS recipes_allergens_idx ON recipes USING gin (allergens);
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id           bigserial PRIMARY KEY,
+      user_id      integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role         text NOT NULL,
+      content      text NOT NULL,
+      actions      jsonb NOT NULL DEFAULT '[]'::jsonb,
+      created_at   timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS chat_messages_user_idx ON chat_messages (user_id, id DESC);
+
+    CREATE TABLE IF NOT EXISTS image_jobs (
+      id           serial PRIMARY KEY,
+      recipe_id    uuid NOT NULL UNIQUE REFERENCES recipes(id) ON DELETE CASCADE,
+      status       text NOT NULL DEFAULT 'pending',
+      attempts     integer NOT NULL DEFAULT 0,
+      error        text,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      updated_at   timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS favorites (
+      user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipe_id  uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, recipe_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS meal_plans (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+      week_start   date NOT NULL,
+      created_by   integer REFERENCES users(id) ON DELETE SET NULL,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (household_id, week_start)
+    );
+
+    CREATE TABLE IF NOT EXISTS plan_entries (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      plan_id      uuid NOT NULL REFERENCES meal_plans(id) ON DELETE CASCADE,
+      day_index    integer NOT NULL CHECK (day_index BETWEEN 0 AND 6),
+      slot         text NOT NULL,
+      recipe_id    uuid REFERENCES recipes(id) ON DELETE SET NULL,
+      custom_title text,
+      servings     integer,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (plan_id, day_index, slot)
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_runs (
+      id         serial PRIMARY KEY,
+      user_id    integer REFERENCES users(id) ON DELETE SET NULL,
+      kind       text NOT NULL,
+      provider   text,
+      model      text,
+      ok         boolean NOT NULL DEFAULT true,
+      latency_ms integer,
+      error      text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS recipes_household_idx ON recipes (household_id);
+    CREATE INDEX IF NOT EXISTS plan_entries_plan_idx ON plan_entries (plan_id);
+
+    -- ── Nachträglich ergänzt: globale Rezeptsammlung, Bewertungen, Einstellungen, Reset-Tokens ──
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_lower text;
+    UPDATE users SET email_lower = lower(email) WHERE email_lower IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON users (email_lower);
+
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS image_url text;
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS total_minutes integer;
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS difficulty text;
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+
+    CREATE TABLE IF NOT EXISTS recipe_ratings (
+      user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipe_id  uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+      stars      integer NOT NULL CHECK (stars BETWEEN 1 AND 5),
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, recipe_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS recipe_comments (
+      id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      recipe_id  uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+      user_id    integer REFERENCES users(id) ON DELETE SET NULL,
+      body       text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id    integer PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      data       jsonb NOT NULL DEFAULT '{}'::jsonb,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id         serial PRIMARY KEY,
+      user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash text NOT NULL,
+      expires_at timestamptz NOT NULL,
+      used_at    timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    -- Freie Reihenfolge pro Tag: mehrere Mahlzeiten pro Tag, sortierbar per Drag & Drop.
+    ALTER TABLE plan_entries ADD COLUMN IF NOT EXISTS position integer NOT NULL DEFAULT 0;
+    ALTER TABLE plan_entries DROP CONSTRAINT IF EXISTS plan_entries_plan_id_day_index_slot_key;
+    WITH dupes AS (
+      SELECT plan_id, day_index
+        FROM plan_entries
+       GROUP BY plan_id, day_index
+      HAVING count(*) > 1 AND count(*) FILTER (WHERE position <> 0) = 0
+    )
+    UPDATE plan_entries e
+       SET position = sub.rn
+      FROM (
+        SELECT e2.id, row_number() OVER (PARTITION BY e2.plan_id, e2.day_index ORDER BY e2.slot, e2.created_at) - 1 AS rn
+          FROM plan_entries e2
+          JOIN dupes d ON d.plan_id = e2.plan_id AND d.day_index = e2.day_index
+      ) sub
+     WHERE e.id = sub.id;
+    CREATE INDEX IF NOT EXISTS plan_entries_order_idx ON plan_entries (plan_id, day_index, position);
+    ALTER TABLE plan_entries ALTER COLUMN slot SET DEFAULT 'mahlzeit';
+
+    -- Einkaufsliste pro Haushalt und Woche (automatisch aus dem Plan + manuelle Artikel)
+    CREATE TABLE IF NOT EXISTS shopping_items (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      household_id uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+      week_start   date NOT NULL,
+      key          text NOT NULL,
+      name         text NOT NULL,
+      amount       numeric(10,2),
+      unit         text NOT NULL DEFAULT '',
+      category     text NOT NULL DEFAULT 'sonstiges',
+      checked      boolean NOT NULL DEFAULT false,
+      source       text NOT NULL DEFAULT 'manual',
+      created_by   integer REFERENCES users(id) ON DELETE SET NULL,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      updated_at   timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (household_id, week_start, key)
+    );
+    CREATE INDEX IF NOT EXISTS shopping_items_lookup_idx ON shopping_items (household_id, week_start);
+
+    CREATE INDEX IF NOT EXISTS recipes_status_idx ON recipes (status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS recipe_ratings_recipe_idx ON recipe_ratings (recipe_id);
+    CREATE INDEX IF NOT EXISTS recipe_comments_recipe_idx ON recipe_comments (recipe_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS password_reset_hash_idx ON password_reset_tokens (token_hash);
+  `);
+}
