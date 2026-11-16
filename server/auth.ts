@@ -360,6 +360,41 @@ authRouter.post('/login', async (req, res) => {
   }
 });
 
+/**
+ * Demo-Zugang für die Portfolio-Vorschau: meldet das Beispielkonto ohne Passwort an.
+ * Nur über demo-*-Domains oder mit DEMO_LOGIN=1, damit die reguläre Instanz geschützt bleibt.
+ */
+authRouter.get('/demo', async (req, res) => {
+  const host = String(req.headers.host || '').toLowerCase();
+  const demoHost = host.startsWith('demo-') || host.startsWith('demo.');
+  if (!demoHost && process.env.DEMO_LOGIN !== '1') {
+    fail(res, 404, 'demo-disabled', 'Demo ist nicht verfügbar.');
+    return;
+  }
+  try {
+    const found = await pool.query<{
+      id: number;
+      email: string;
+      display_name: string;
+      token_version: number;
+    }>('SELECT id, email, display_name, token_version FROM users WHERE lower(email) = lower($1)', [
+      'demo@portfolio.test',
+    ]);
+    const user = found.rows[0];
+    if (!user) {
+      fail(res, 404, 'demo-missing', 'Demo ist nicht eingerichtet.');
+      return;
+    }
+    res.json({
+      token: signToken(user.id, user.email, user.token_version),
+      user: { id: user.id, email: user.email, displayName: user.display_name },
+    });
+  } catch (e) {
+    console.error('[auth/demo]', e);
+    fail(res, 500, 'demo-failed', 'Demo konnte nicht geladen werden.');
+  }
+});
+
 authRouter.get('/me', async (req: AuthRequest, res) => {
   if (!req.userId) {
     fail(res, 401, 'unauthorized', 'Bitte einloggen.');
