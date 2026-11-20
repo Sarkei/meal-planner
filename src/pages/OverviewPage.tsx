@@ -14,6 +14,7 @@ import { api, formatWeekLabel, mondayOf } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { Recipe, WeekPlan } from '../lib/types';
 import { Band, PageHead, StatRow } from '../components/AppShell';
+import { DetailSheet, StatButton, type DetailDef } from '../components/DetailSheet';
 
 /** Bereiche der App — dieselbe Liste wie die Navigation in App.tsx. */
 export const AREAS = [
@@ -77,6 +78,7 @@ export function OverviewPage() {
   });
   const [recent, setRecent] = useState<Recipe[]>([]);
   const [recipesInPlan, setRecipesInPlan] = useState<number | null>(null);
+  const [detail, setDetail] = useState<DetailDef | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -120,16 +122,62 @@ export function OverviewPage() {
     };
   }, [activeHousehold, weekStart]);
 
-  const stats = [
-    { value: data.recipes === null ? '—' : String(data.recipes), label: 'Rezepte in der Sammlung' },
+  // Kennzahlen mit Detailansicht
+  const stats: { value: string; label: string; detail: DetailDef }[] = [
+    {
+      value: data.recipes === null ? '—' : String(data.recipes),
+      label: 'Rezepte in der Sammlung',
+      detail: {
+        titel: 'Rezepte in der Sammlung',
+        hinweis: 'Wie viele Rezepte insgesamt verfügbar sind und wann sie dazukamen.',
+        hoeherBesser: true,
+        laden: async () => {
+          const res = await api<{ recipes: Recipe[] }>('/recipes?limit=60');
+          return res.recipes.map((r) => ({
+            label: new Date(r.createdAt ?? Date.now()).toLocaleDateString('de-DE'),
+            wert: 1,
+            hint: r.title,
+          }));
+        },
+      },
+    },
     {
       value: recipesInPlan === null ? '—' : String(recipesInPlan),
       label: 'Gerichte diese Woche',
+      detail: {
+        titel: 'Gerichte diese Woche',
+        hinweis: 'Was für die laufende Woche eingeplant ist.',
+        laden: async () => {
+          if (!activeHousehold) return [];
+          const plan = await api<WeekPlan>(`/plans/${activeHousehold.id}/${weekStart}`);
+          return plan.entries.map((e) => ({ label: e.title, wert: 1 }));
+        },
+      },
     },
-    { value: data.favorites === null ? '—' : String(data.favorites), label: 'Favoriten' },
+    {
+      value: data.favorites === null ? '—' : String(data.favorites),
+      label: 'Favoriten',
+      detail: {
+        titel: 'Favoriten',
+        hinweis: 'Rezepte, die du oder dein Haushalt als Favorit markiert habt.',
+        laden: async () => {
+          const res = await api<{ recipes: Recipe[] }>('/recipes/favorites');
+          return res.recipes.map((r) => ({ label: r.title, wert: 1 }));
+        },
+      },
+    },
     {
       value: data.members === null ? '—' : String(data.members),
       label: 'Personen im Haushalt',
+      detail: {
+        titel: 'Personen im Haushalt',
+        hinweis: 'Wer Zugriff auf die gemeinsamen Pläne hat.',
+        laden: async () => {
+          if (!activeHousehold) return [];
+          const h = await api<{ members: { userId: number; name?: string }[] }>(`/households/${activeHousehold.id}`);
+          return h.members.map((m) => ({ label: m.name ?? `Person ${m.userId}`, wert: 1 }));
+        },
+      },
     },
   ];
 
@@ -143,7 +191,16 @@ export function OverviewPage() {
         title={`Hallo ${firstName}, was gibt es diese Woche?`}
         intro={`Planen, einkaufen, kochen — alles an einer Stelle. Diese Woche: ${weekLabel}`}
       >
-        <StatRow items={stats} />
+        <dl className="stat-row">
+          {stats.map((s) => (
+            <StatButton
+              key={s.label}
+              value={s.value}
+              label={s.label}
+              onClick={() => setDetail(s.detail)}
+            />
+          ))}
+        </dl>
       </PageHead>
 
       <section className="app-container app-section pt-12">
@@ -207,6 +264,7 @@ export function OverviewPage() {
           </ul>
         )}
       </Band>
+      {detail && <DetailSheet def={detail} onClose={() => setDetail(null)} />}
     </>
   );
 }
