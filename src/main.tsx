@@ -4,6 +4,7 @@ import './styles.css';
 import { App } from './App';
 import { AuthProvider } from './lib/auth';
 import { getToken, setToken } from './lib/api';
+import { starteSichtbareHoehe } from './lib/vvHeight';
 
 /**
  * Demo-Domains (demo-*) öffnen sich mit dem Beispielkonto, ohne Registrierung.
@@ -23,6 +24,9 @@ async function bootstrapDemo(): Promise<void> {
   }
 }
 
+
+// Sichtbare Hoehe als CSS-Variable (Tastatur auf dem Handy).
+starteSichtbareHoehe();
 const root = createRoot(document.getElementById('root')!);
 
 function render() {
