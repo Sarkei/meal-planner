@@ -44,6 +44,23 @@ export function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Der Chat muss der sichtbaren Flaeche folgen, sonst liegt die Eingabezeile
+  // auf dem Handy hinter der Tastatur (100dvh kennt die Tastatur nicht).
+  const [sichtbareHoehe, setSichtbareHoehe] = useState<number | null>(null);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const aktualisieren = () => setSichtbareHoehe(Math.round(vv.height));
+    aktualisieren();
+    vv.addEventListener('resize', aktualisieren);
+    vv.addEventListener('scroll', aktualisieren);
+    return () => {
+      vv.removeEventListener('resize', aktualisieren);
+      vv.removeEventListener('scroll', aktualisieren);
+    };
+  }, []);
+
   /** Textfeld wächst mit dem Inhalt statt Scrollbalken zu zeigen */
   const autoGrow = (el: HTMLTextAreaElement) => {
     el.style.height = 'auto';
@@ -122,7 +139,10 @@ export function ChatPage() {
   };
 
   return (
-    <div className="flex w-full flex-col gap-3" style={{ minHeight: 'calc(100dvh - 240px)' }}>
+    <div
+      className="flex w-full flex-col gap-3"
+      style={{ height: `calc(${sichtbareHoehe ? `${sichtbareHoehe}px` : 'var(--vv-height, 100dvh)'} - 240px)` }}
+    >
       <div className="card flex items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-leaf" />
@@ -165,8 +185,8 @@ export function ChatPage() {
             <div
               className={
                 m.role === 'user'
-                  ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-leaf px-3.5 py-2.5 text-sm text-on-accent'
-                  : 'max-w-[92%] space-y-2 rounded-2xl rounded-bl-sm bg-cream px-3.5 py-2.5 text-sm text-ink/85'
+                  ? 'max-w-[90%] rounded-2xl rounded-br-sm bg-leaf sm:max-w-[85%] px-3.5 py-2.5 text-sm text-on-accent'
+                  : 'w-full max-w-[92%] space-y-2 rounded-2xl rounded-bl-sm bg-cream px-3.5 py-2.5 text-sm text-ink/85'
               }
             >
               {m.role === 'assistant' ? (
@@ -218,6 +238,17 @@ export function ChatPage() {
               setDraft(e.target.value);
               autoGrow(e.currentTarget);
             }}
+            onFocus={() => {
+              // Tastatur oeffnet verzoegert - mehrfach nachscrollen, damit die
+              // letzte Nachricht ueber der Eingabe sichtbar bleibt.
+              [120, 320, 600].forEach((ms) =>
+                window.setTimeout(() => {
+                  const el = scrollRef.current;
+                  if (el) el.scrollTop = el.scrollHeight;
+                }, ms),
+              );
+            }}
+            enterKeyHint="send"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
