@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, ScanBarcode, X } from 'lucide-react';
 
 /**
@@ -80,7 +81,7 @@ export function BarcodeScanner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
+  const inhalt = (
     <div className="fixed inset-0 z-50 flex flex-col bg-scrim p-4 text-on-scrim">
       <div className="mx-auto flex w-full max-w-md flex-col">
         <div className="mb-3 flex items-center justify-between">
@@ -113,4 +114,7 @@ export function BarcodeScanner({
       </div>
     </div>
   );
+
+  // Portal: haengt am <body>, damit der Dialog die Seite nicht verschiebt.
+  return typeof document === 'undefined' ? inhalt : createPortal(inhalt, document.body);
 }

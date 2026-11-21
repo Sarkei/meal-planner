@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export function Modal({
@@ -28,7 +29,7 @@ export function Modal({
     };
   }, [onClose]);
 
-  return (
+  const inhalt = (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div
         className={`flex max-h-[var(--vv-height,92vh)] w-full flex-col overflow-hidden rounded-t-2xl bg-surface shadow-sm sm:rounded-2xl ${
@@ -49,4 +50,7 @@ export function Modal({
       </div>
     </div>
   );
+
+  // Portal: haengt am <body>, damit der Dialog die Seite nicht verschiebt.
+  return typeof document === 'undefined' ? inhalt : createPortal(inhalt, document.body);
 }

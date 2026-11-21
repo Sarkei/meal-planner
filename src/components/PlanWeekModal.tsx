@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, Sparkles, X } from 'lucide-react';
 import { api, formatWeekLabel, toYmd } from '../lib/api';
 import { WEEKDAYS, type HouseholdPreferences, type WeekPlan } from '../lib/types';
@@ -74,7 +75,7 @@ export function PlanWeekModal({
     }
   };
 
-  return (
+  const inhalt = (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6" onClick={onClose}>
       <div
         className="w-full max-w-md space-y-4 rounded-t-2xl border border-ink/10 bg-surface p-5 sm:rounded-2xl"
@@ -192,4 +193,7 @@ export function PlanWeekModal({
       </div>
     </div>
   );
+
+  // Portal: haengt am <body>, damit der Dialog die Seite nicht verschiebt.
+  return typeof document === 'undefined' ? inhalt : createPortal(inhalt, document.body);
 }
