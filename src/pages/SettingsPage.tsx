@@ -23,6 +23,7 @@ import {
 } from '../lib/preferences';
 import { SLOTS, type Slot, type UserSettings } from '../lib/types';
 import { TagListInput } from '../components/TagListInput';
+import { useConfirm } from '../components/ConfirmDialog';
 
 type Option = { value: string; label: string };
 
@@ -133,6 +134,7 @@ function OptionRow({
 
 export function SettingsPage() {
   const { user, settings, updateSettings, applyTheme, refresh, logout } = useAuth();
+  const ask = useConfirm();
   const [name, setName] = useState(user?.displayName ?? '');
   const [nameBusy, setNameBusy] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
@@ -211,8 +213,15 @@ export function SettingsPage() {
     }
   };
 
+  const logoutAllBestaetigen = () =>
+    ask.oeffne({
+      title: 'Überall abmelden',
+      text: 'Du wirst auf allen Geräten abgemeldet und musst dich neu anmelden.',
+      confirmLabel: 'Abmelden',
+      onConfirm: () => logoutAll(),
+    });
+
   const logoutAll = async () => {
-    if (!window.confirm('Auf allen Geräten abmelden?')) return;
     const data = await api<{ tokenVersion: number }>('/auth/logout-all', { method: 'POST', body: {} });
     // Der eigene Token ist damit auch ungültig — neu einloggen.
     setToken(null);
@@ -220,8 +229,16 @@ export function SettingsPage() {
     void data;
   };
 
+  const deleteAccountBestaetigen = () =>
+    ask.oeffne({
+      title: 'Konto löschen',
+      text: 'Dein Konto und alle zugehörigen Daten werden gelöscht. Das lässt sich nicht rückgängig machen.',
+      confirmLabel: 'Endgültig löschen',
+      danger: true,
+      onConfirm: () => deleteAccount(),
+    });
+
   const deleteAccount = async () => {
-    if (!window.confirm('Konto wirklich löschen? Das lässt sich nicht rückgängig machen.')) return;
     setBusy(true);
     setDeleteError(null);
     try {
@@ -548,7 +565,7 @@ export function SettingsPage() {
           <button className="btn btn-ghost" onClick={() => void exportData()} disabled={busy}>
             <Download className="h-4 w-4" /> Daten exportieren (JSON)
           </button>
-          <button className="btn btn-ghost" onClick={() => void logoutAll()}>
+          <button className="btn btn-ghost" onClick={() => logoutAllBestaetigen()}>
             <LogOut className="h-4 w-4" /> Auf allen Geräten abmelden
           </button>
         </div>
@@ -574,13 +591,15 @@ export function SettingsPage() {
           <button
             className="btn btn-ghost !text-clay"
             disabled={busy || deletePassword.length < 1}
-            onClick={() => void deleteAccount()}
+            onClick={() => deleteAccountBestaetigen()}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Konto löschen
           </button>
         </div>
         {deleteError && <p className="text-xs font-semibold text-red-600">{deleteError}</p>}
       </div>
+
+      {ask.dialog}
     </div>
   );
 }

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Check, Loader2, LogOut, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
+import { useConfirm } from '../components/ConfirmDialog';
 
 export function ProfilePage() {
   const { user, logout, refresh } = useAuth();
+  const ask = useConfirm();
   const [name, setName] = useState(user?.displayName ?? '');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -24,8 +26,16 @@ export function ProfilePage() {
     })();
   }, []);
 
+  const deleteAccountBestaetigen = () =>
+    ask.oeffne({
+      title: 'Konto löschen',
+      text: 'Dein Konto und alle Daten werden gelöscht. Das lässt sich nicht rückgängig machen.',
+      confirmLabel: 'Endgültig löschen',
+      danger: true,
+      onConfirm: () => deleteAccount(),
+    });
+
   const deleteAccount = async () => {
-    if (!window.confirm('Konto wirklich löschen? Das lässt sich nicht rückgängig machen.')) return;
     setBusy(true);
     setDeleteError(null);
     try {
@@ -117,13 +127,15 @@ export function ProfilePage() {
           <button
             className="btn btn-ghost !text-clay"
             disabled={busy || deletePassword.length < 1}
-            onClick={() => void deleteAccount()}
+            onClick={() => deleteAccountBestaetigen()}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Konto löschen
           </button>
         </div>
         {deleteError && <p className="text-xs font-semibold text-red-600">{deleteError}</p>}
       </div>
+
+      {ask.dialog}
     </div>
   );
 }

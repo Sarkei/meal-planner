@@ -26,6 +26,7 @@ import { RecipeEditor, emptyRecipeDraft } from '../components/RecipeEditor';
 import { RecipeChatCard } from '../components/RecipeChatCard';
 import { Modal } from '../components/Modal';
 import type { Recipe, RecipeComment, RecipeDraft } from '../lib/types';
+import { useConfirm } from '../components/ConfirmDialog';
 
 function toDraft(recipe: Recipe): RecipeDraft {
   return {
@@ -47,6 +48,7 @@ const DIFFICULTY_LABEL: Record<string, string> = { leicht: 'Leicht', mittel: 'Mi
 
 export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
   const { user, activeHousehold, settings } = useAuth();
+  const ask = useConfirm();
   const isNew = !recipeId || recipeId === 'new';
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [draft, setDraft] = useState<RecipeDraft>(emptyRecipeDraft);
@@ -126,10 +128,18 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
     }
   };
 
+  const archiveBestaetigen = () => {
+    if (!recipe) return;
+    ask.oeffne({
+      title: 'Rezept archivieren',
+      text: `„${recipe.title}" wird aus der Sammlung genommen, bleibt aber in der Datenbank erhalten.`,
+      confirmLabel: 'Archivieren',
+      onConfirm: () => archive(),
+    });
+  };
+
   const archive = async () => {
     if (!recipe) return;
-    if (!window.confirm(`„${recipe.title}" archivieren? Es verschwindet aus der Sammlung, bleibt aber in der Datenbank.`))
-      return;
     setBusy(true);
     try {
       await api(`/recipes/${recipe.id}`, { method: 'DELETE' });
@@ -252,7 +262,7 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
                   </button>
                   <button
                     className="btn btn-ghost btn-sm text-xs !text-clay"
-                    onClick={() => void archive()}
+                    onClick={() => archiveBestaetigen()}
                     disabled={busy}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -535,6 +545,8 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
           }}
         />
       )}
+
+      {ask.dialog}
     </div>
   );
 }

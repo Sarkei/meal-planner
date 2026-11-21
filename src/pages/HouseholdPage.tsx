@@ -28,6 +28,7 @@ import { Modal } from '../components/Modal';
 import { TagListInput } from '../components/TagListInput';
 import { Collapsible } from '../components/Collapsible';
 import { PlanWeekModal } from '../components/PlanWeekModal';
+import { useConfirm } from '../components/ConfirmDialog';
 
 type ChipGroupProps = {
   label: string;
@@ -74,6 +75,7 @@ function ChipGroup({ label, hint, options, selected, emptyLabel, onToggle, onCle
 
 export function HouseholdPage() {
   const { activeHousehold, households, refresh, selectHousehold, user } = useAuth();
+  const ask = useConfirm();
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [loading, setLoading] = useState(Boolean(activeHousehold));
   const [error, setError] = useState<string | null>(null);
@@ -264,8 +266,16 @@ export function HouseholdPage() {
     }
   };
 
+  const entfernenBestaetigen = (member: HouseholdMember) =>
+    ask.oeffne({
+      title: 'Mitglied entfernen',
+      text: `${member.displayName} aus dem Haushalt entfernen? Die gemeinsamen Pläne bleiben bestehen.`,
+      confirmLabel: 'Entfernen',
+      danger: true,
+      onConfirm: () => removeMember(member),
+    });
+
   const removeMember = async (member: HouseholdMember) => {
-    if (!window.confirm(`${member.displayName} aus dem Haushalt entfernen?`)) return;
     setBusy(true);
     try {
       await api(`/households/${activeHousehold.id}/members/${member.userId}`, { method: 'DELETE' });
@@ -278,8 +288,18 @@ export function HouseholdPage() {
     }
   };
 
+  const verlassenBestaetigen = () =>
+    ask.oeffne({
+      title: isOwner ? 'Haushalt löschen' : 'Haushalt verlassen',
+      text: isOwner
+        ? 'Der ganze Haushalt inklusive aller Wochenpläne wird gelöscht. Das lässt sich nicht rückgängig machen.'
+        : 'Du verlässt den Haushalt. Deine eigenen Rezepte bleiben erhalten.',
+      confirmLabel: isOwner ? 'Endgültig löschen' : 'Verlassen',
+      danger: true,
+      onConfirm: () => leave(),
+    });
+
   const leave = async () => {
-    if (!window.confirm(isOwner ? 'Haushalt inklusive Wochenplänen löschen?' : 'Haushalt verlassen?')) return;
     setBusy(true);
     try {
       if (isOwner) await api(`/households/${activeHousehold.id}?force=1`, { method: 'DELETE' });
@@ -566,7 +586,7 @@ export function HouseholdPage() {
                   {isOwner && m.role !== 'owner' && (
                     <button
                       className="rounded-lg p-1.5 text-ink/35 hover:bg-danger-soft hover:text-clay"
-                      onClick={() => void removeMember(m)}
+                      onClick={() => entfernenBestaetigen(m)}
                       aria-label="Mitglied entfernen"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -588,10 +608,12 @@ export function HouseholdPage() {
         />
       )}
 
-      <button className="btn btn-ghost !text-clay" onClick={() => void leave()} disabled={busy}>
+      <button className="btn btn-ghost !text-clay" onClick={() => verlassenBestaetigen()} disabled={busy}>
         <LogOut className="h-4 w-4" /> {isOwner ? 'Haushalt löschen' : 'Haushalt verlassen'}
       </button>
 
+
+      {ask.dialog}
     </div>
   );
 }
