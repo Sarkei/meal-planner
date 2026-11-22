@@ -81,7 +81,13 @@ export function PlanWeekModal({
       onDone({ weekStart, created: data.created, reused: data.reused });
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Die Woche konnte nicht geplant werden.');
+      const msg = e instanceof Error ? e.message : String(e);
+      // Proxy liefert bei Zeitüberschreitung eine HTML-Seite — dann ist die KI noch dran.
+      setError(
+        /not valid JSON|Unexpected token '<'|DOCTYPE/i.test(msg)
+          ? 'Die KI braucht länger als der Server wartet. Bitte noch einmal versuchen — beim zweiten Lauf greifen vorhandene Rezepte.'
+          : msg || 'Die Woche konnte nicht geplant werden.',
+      );
     } finally {
       setBusy(false);
     }

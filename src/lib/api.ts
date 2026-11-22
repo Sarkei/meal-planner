@@ -36,7 +36,21 @@ export async function api<T>(path: string, options: { method?: string; body?: un
           : JSON.stringify(options.body),
   });
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : {};
+  // Kein JSON (z. B. 502-HTML vom Proxy): verständliche Meldung statt JSON.parse-Absturz
+  let data: unknown = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new ApiError(
+        res.status,
+        'bad-gateway',
+        res.status === 502 || res.status === 504
+          ? 'Der Server hat zu lange gebraucht. Bitte noch einmal versuchen.'
+          : 'Der Server hat unerwartet geantwortet (keine JSON-Daten).',
+      );
+    }
+  }
   if (!res.ok) {
     const err = data as { error?: string; message?: string };
     throw new ApiError(res.status, err.error ?? 'error', err.message ?? `Fehler ${res.status}`);

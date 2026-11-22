@@ -17,9 +17,12 @@ export type Route = { name: string; id?: string; params: URLSearchParams };
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '');
-  const [path, query] = raw.split('?');
+  // Query VOR dem Pfad abtrennen: "#/week?w=2026-11-23" -> path "week", Query "w=..."
+  const qIndex = raw.indexOf('?');
+  const path = qIndex >= 0 ? raw.slice(0, qIndex) : raw;
+  const query = qIndex >= 0 ? raw.slice(qIndex + 1) : '';
   const [name, id] = path.split('/');
-  return { name: name || 'home', id, params: new URLSearchParams(query ?? '') };
+  return { name: name || 'home', id, params: new URLSearchParams(query) };
 }
 
 export function navigate(path: string): void {
