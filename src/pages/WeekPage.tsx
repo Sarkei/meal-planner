@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeftRight,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -8,6 +9,7 @@ import {
   GripVertical,
   Loader2,
   Plus,
+  RefreshCw,
   Sparkles,
   Trash2,
   UtensilsCrossed,
@@ -18,18 +20,23 @@ import { addDays, api, formatDayMonth, formatWeekLabel, mondayOf, toYmd } from '
 import { WEEKDAYS, type PlanEntry, type Recipe, type WeekPlan } from '../lib/types';
 import { useHouseholdEvents } from '../lib/useHouseholdEvents';
 import { Modal } from '../components/Modal';
+import { PlanWeekModal } from '../components/PlanWeekModal';
 
 const EMPTY_DAYS: PlanEntry[][] = [[], [], [], [], [], [], []];
 
 type DropTarget = { dayIndex: number; index: number } | null;
 
-export function WeekPage() {
+export function WeekPage({ initialWeek }: { initialWeek?: string } = {}) {
   const { activeHousehold, settings } = useAuth();
-  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [weekStart, setWeekStart] = useState(() => initialWeek ?? mondayOf(new Date()));
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pickerDay, setPickerDay] = useState<number | null>(null);
+  /** Tag, der neu geplant werden soll (null = Dialog zu). */
+  const [replanDay, setReplanDay] = useState<number | null>(null);
+  /** Zwei Gerichte tauschen: erst Quelle, dann Ziel. */
+  const [swapSource, setSwapSource] = useState<PlanEntry | null>(null);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget>(null);
@@ -136,6 +143,31 @@ export function WeekPage() {
     }
   };
 
+  const onSwapClick = (entry: PlanEntry) => {
+    if (!swapSource) {
+      setSwapSource(entry);
+      return;
+    }
+    if (swapSource.id === entry.id) {
+      setSwapSource(null);
+      return;
+    }
+    // Tauschen: beide Einträge bekommen Tag und Position des anderen
+    const from = swapSource;
+    const to = entry;
+    setSwapSource(null);
+    if (from.dayIndex === to.dayIndex && from.position === to.position) return;
+    const days = byDay.map((entries) => [...entries]);
+    const fromDay = days[from.dayIndex];
+    const toDay = days[to.dayIndex];
+    const fromIdx = fromDay.findIndex((e) => e.id === from.id);
+    const toIdx = toDay.findIndex((e) => e.id === to.id);
+    if (fromIdx < 0 || toIdx < 0) return;
+    days[from.dayIndex][fromIdx] = { ...to, dayIndex: from.dayIndex };
+    days[to.dayIndex][toIdx] = { ...from, dayIndex: to.dayIndex };
+    void persistOrder(days);
+  };
+
   const moveEntry = (entryId: string, toDay: number, toIndex: number) => {
     const days = byDay.map((entries) => [...entries]);
     let moved: PlanEntry | undefined;
@@ -206,6 +238,15 @@ export function WeekPage() {
         </div>
       </div>
 
+      {swapSource && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-leaf/30 bg-leaf-soft px-3 py-2 text-xs font-semibold text-leaf">
+          <ArrowLeftRight className="h-4 w-4" />
+          <span>„{swapSource.title}“ tauschen — jetzt das Zielgericht antippen.</span>
+          <button className="ml-auto rounded-lg border border-leaf/40 px-2 py-1" onClick={() => setSwapSource(null)}>
+            Abbrechen
+          </button>
+        </div>
+      )}
       {error && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>}
       {confirmClear && (
         <div className="card flex flex-col gap-3 border-danger/30 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -264,6 +305,15 @@ export function WeekPage() {
                     {kcalPerDay[dayIndex] > 0 && (
                       <span className="text-[11px] font-semibold text-ink/45">≈ {Math.round(kcalPerDay[dayIndex])} kcal</span>
                     )}
+                    <button
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-ink/15 text-ink/55 transition hover:border-leaf hover:text-leaf disabled:opacity-40"
+                      onClick={() => setReplanDay(dayIndex)}
+                      disabled={busy}
+                      aria-label={`${day} neu planen`}
+                      title={`${day} mit der KI neu planen`}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       className="flex h-8 w-8 items-center justify-center rounded-xl border border-ink/15 text-leaf transition hover:border-leaf hover:bg-leaf-soft"
                       onClick={() => setPickerDay(dayIndex)}
@@ -330,7 +380,7 @@ export function WeekPage() {
                               {entry.recipeId ? (
                                 <button
                                   className="block max-w-full truncate text-left text-sm font-semibold hover:text-leaf"
-                                  onClick={() => window.location.assign(`#/recipe/${entry.recipeId}`)}
+                                  onClick={() => window.location.assign(`#/recipe/${entry.recipeId}?from=week&week=${weekStart}`)}
                                 >
                                   {entry.title}
                                 </button>
@@ -348,6 +398,20 @@ export function WeekPage() {
                               </p>
                             </div>
 
+                            <button
+                              className={`rounded p-1 transition ${
+                                swapSource?.id === entry.id
+                                  ? 'bg-leaf-soft text-leaf ring-1 ring-leaf'
+                                  : swapSource
+                                    ? 'text-ink/45 hover:text-leaf'
+                                    : 'text-ink/30 hover:text-leaf'
+                              }`}
+                              onClick={() => onSwapClick(entry)}
+                              aria-label={`${entry.title} tauschen`}
+                              title="Mit einem anderen Gericht tauschen: hier tippen, dann das Ziel wählen"
+                            >
+                              <ArrowLeftRight className="h-3.5 w-3.5" />
+                            </button>
                             <div className="flex flex-col gap-0.5 sm:hidden">
                               <button
                                 className="rounded p-0.5 text-ink/35 disabled:opacity-20"
@@ -391,6 +455,36 @@ export function WeekPage() {
             Rezepte lassen sich mit der Maus in der Tageskarte sortieren und in andere Tage ziehen — auf dem Handy mit den Pfeilen.
           </p>
         </div>
+      )}
+
+      {replanDay !== null && (
+        <PlanWeekModal
+          householdId={activeHousehold.id}
+          prefs={{
+            planDays: [replanDay],
+            planSlots: settings.defaultSlots,
+            planServings: settings.defaultServings ?? 2,
+            diets: settings.diets ?? [],
+            cuisines: settings.cuisines ?? [],
+            allergies: settings.allergies ?? [],
+            dislikes: settings.dislikes ?? [],
+            appliances: settings.appliances ?? [],
+            maxMinutes: settings.maxMinutes ?? null,
+            kcalTarget: settings.kcalTarget ?? null,
+            note: '',
+            autoPlan: false,
+          }}
+          fixedWeekStart={weekStart}
+          initialDays={[replanDay]}
+          initialMode="replace"
+          title={`${WEEKDAYS[replanDay]} neu planen`}
+          subtitle={`${formatDayMonth(addDays(weekStart, replanDay))} wird neu belegt — die übrigen Tage bleiben unverändert.`}
+          onClose={() => setReplanDay(null)}
+          onDone={() => {
+            setReplanDay(null);
+            void load();
+          }}
+        />
       )}
 
       {pickerDay !== null && (

@@ -645,7 +645,7 @@ export async function planWeekForUser(
     if (body.mode !== 'fill' && reuseCount > 0) {
       const pool2 = await pool.query<{ id: string; title: string }>(
         `SELECT id, title FROM recipes
-          WHERE status = 'active' AND title <> ALL($1::text[])
+          WHERE status = 'active' AND ai_excluded = false AND title <> ALL($1::text[])
             AND NOT (allergens && $2::text[])
             AND ($3::text[] = '{}' OR diets && $3::text[])
           ORDER BY random() LIMIT $4`,

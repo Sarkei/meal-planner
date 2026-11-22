@@ -27,6 +27,7 @@ type RecipeRow = {
   allergens: string[] | null;
   source: string;
   status: string;
+  ai_excluded?: boolean;
   ingredients: unknown;
   steps: unknown;
   nutrition: unknown;
@@ -87,6 +88,7 @@ function mapRecipe(row: RecipeRow) {
     allergens: row.allergens ?? [],
     source: row.source,
     status: row.status,
+    aiExcluded: Boolean(row.ai_excluded),
     ingredients: row.ingredients ?? [],
     steps: row.steps ?? [],
     nutrition: row.nutrition ?? {},
@@ -425,6 +427,24 @@ recipesRouter.delete('/:id', async (req: AuthRequest, res) => {
   }
   await pool.query("UPDATE recipes SET status = 'archived', archived_at = now() WHERE id = $1", [req.params.id]);
   res.json({ ok: true, archived: true });
+});
+
+/**
+ * Aus der KI-Auswahl nehmen oder wieder aufnehmen. Das Rezept bleibt vollständig
+ * erhalten (kein Archivieren) — es wird nur beim automatischen Planen nicht mehr vorgeschlagen.
+ */
+recipesRouter.post('/:id/ai-exclude', async (req: AuthRequest, res) => {
+  const excluded = Boolean((req.body as { excluded?: boolean })?.excluded);
+  const r = await pool.query(
+    `UPDATE recipes SET ai_excluded = $2, ai_excluded_at = CASE WHEN $2 THEN now() ELSE NULL END
+      WHERE id = $1 RETURNING id, ai_excluded`,
+    [req.params.id, excluded],
+  );
+  if (!r.rowCount) {
+    fail(res, 404, 'not-found', 'Rezept nicht gefunden.');
+    return;
+  }
+  res.json({ ok: true, aiExcluded: r.rows[0].ai_excluded });
 });
 
 recipesRouter.post('/:id/restore', async (req: AuthRequest, res) => {

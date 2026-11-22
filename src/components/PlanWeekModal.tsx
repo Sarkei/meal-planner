@@ -13,11 +13,22 @@ export function PlanWeekModal({
   prefs,
   onClose,
   onDone,
+  fixedWeekStart,
+  initialDays,
+  initialMode,
+  title,
+  subtitle,
 }: {
   householdId: string;
   prefs: HouseholdPreferences;
   onClose: () => void;
   onDone: (info: { weekStart: string; created: number; reused: number }) => void;
+  /** Woche fest vorgeben (z. B. wenn nur ein Tag der aktuellen Woche neu geplant wird). */
+  fixedWeekStart?: string;
+  initialDays?: number[];
+  initialMode?: 'replace' | 'fill';
+  title?: string;
+  subtitle?: string;
 }) {
   const weeks = useMemo(() => {
     const monday = new Date();
@@ -29,11 +40,12 @@ export function PlanWeekModal({
     });
   }, []);
 
-  const [weekStart, setWeekStart] = useState(weeks[0]);
-  const [days, setDays] = useState<number[]>(prefs.planDays.length ? prefs.planDays : [0, 1, 2, 3, 4]);
+  const [weekStartWeek, setWeekStartWeek] = useState(fixedWeekStart ?? weeks[0]);
+  const weekStart = fixedWeekStart ?? weekStartWeek;
+  const [days, setDays] = useState<number[]>(initialDays ?? (prefs.planDays.length ? prefs.planDays : [0, 1, 2, 3, 4]));
   const [slots, setSlots] = useState<string[]>(prefs.planSlots.length ? prefs.planSlots : ['abend']);
   const [servings, setServings] = useState(prefs.planServings || 2);
-  const [mode, setMode] = useState<'replace' | 'fill'>('replace');
+  const [mode, setMode] = useState<'replace' | 'fill'>(initialMode ?? 'replace');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,9 +95,9 @@ export function PlanWeekModal({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="label !mb-0">Woche planen</p>
+            <p className="label !mb-0">{title ?? 'Woche planen'}</p>
             <p className="mt-1 text-xs text-ink/50">
-              Gilt nur für diesen Lauf — die Vorgaben im Haushalt bleiben unverändert.
+              {subtitle ?? 'Gilt nur für diesen Lauf — die Vorgaben im Haushalt bleiben unverändert.'}
             </p>
           </div>
           <button className="rounded-lg p-1.5 text-ink/40 hover:bg-ink/5" onClick={onClose} aria-label="Schließen">
@@ -93,9 +105,10 @@ export function PlanWeekModal({
           </button>
         </div>
 
+        {!fixedWeekStart && (
         <div>
           <label className="label">Woche</label>
-          <select className="input" value={weekStart} onChange={(e) => setWeekStart(e.target.value)}>
+          <select className="input" value={weekStartWeek} onChange={(e) => setWeekStartWeek(e.target.value)}>
             {weeks.map((week, index) => (
               <option key={week} value={week}>
                 {index === 0 ? 'Diese Woche' : index === 1 ? 'Nächste Woche' : ''} {formatWeekLabel(week)}
@@ -103,6 +116,7 @@ export function PlanWeekModal({
             ))}
           </select>
         </div>
+        )}
 
         <div>
           <label className="label">Tage</label>
@@ -188,7 +202,7 @@ export function PlanWeekModal({
 
         <button className="btn btn-primary w-full" onClick={() => void submit()} disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {busy ? 'Wird geplant …' : 'Woche planen'}
+          {busy ? 'Wird geplant …' : (fixedWeekStart ? 'Neu planen' : 'Woche planen')}
         </button>
       </div>
     </div>

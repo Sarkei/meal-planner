@@ -65,6 +65,10 @@ export async function initDb(): Promise<void> {
     ALTER TABLE recipes ADD COLUMN IF NOT EXISTS diets text[] NOT NULL DEFAULT '{}';
     ALTER TABLE recipes ADD COLUMN IF NOT EXISTS cuisines text[] NOT NULL DEFAULT '{}';
     ALTER TABLE recipes ADD COLUMN IF NOT EXISTS allergens text[] NOT NULL DEFAULT '{}';
+    -- Aus der KI-Auswahl genommen: Rezept bleibt erhalten, wird aber nicht mehr automatisch eingeplant
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS ai_excluded boolean NOT NULL DEFAULT false;
+    ALTER TABLE recipes ADD COLUMN IF NOT EXISTS ai_excluded_at timestamptz;
+    CREATE INDEX IF NOT EXISTS recipes_ai_excluded_idx ON recipes (ai_excluded) WHERE ai_excluded;
     CREATE INDEX IF NOT EXISTS recipes_diets_idx ON recipes USING gin (diets);
     CREATE INDEX IF NOT EXISTS recipes_cuisines_idx ON recipes USING gin (cuisines);
     CREATE INDEX IF NOT EXISTS recipes_allergens_idx ON recipes USING gin (allergens);

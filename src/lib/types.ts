@@ -74,6 +74,8 @@ export type Recipe = {
   allergens: string[];
   source: 'manual' | 'ai' | 'copied' | string;
   status: 'active' | 'archived' | string;
+  /** Aus der KI-Auswahl genommen: bleibt in der Sammlung, wird nicht automatisch eingeplant. */
+  aiExcluded?: boolean;
   ingredients: Ingredient[];
   steps: string[];
   nutrition: Nutrition;

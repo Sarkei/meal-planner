@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   ChefHat,
@@ -46,8 +47,13 @@ function toDraft(recipe: Recipe): RecipeDraft {
 
 const DIFFICULTY_LABEL: Record<string, string> = { leicht: 'Leicht', mittel: 'Mittel', schwer: 'Schwer' };
 
-export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
+export function RecipeDetailPage({ recipeId, from = '' }: { recipeId?: string; from?: string }) {
   const { user, activeHousehold, settings } = useAuth();
+  /** Rückweg: aus der Wochenansicht geöffnet -> dorthin zurück (gleiche Woche), sonst Sammlung. */
+  const fromWeek = from.startsWith('week');
+  const weekParam = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('week');
+  const backLabel = fromWeek ? 'Zurück zur Woche' : 'Sammlung';
+  const goBack = () => navigate(fromWeek ? (weekParam ? `week?w=${weekParam}` : 'week') : 'recipes');
   const ask = useConfirm();
   const isNew = !recipeId || recipeId === 'new';
   const [recipe, setRecipe] = useState<Recipe | null>(null);
@@ -58,6 +64,8 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showRefine, setShowRefine] = useState(false);
+  /** Nach dem Neuladen fragen, ob das Gericht künftig in der KI-Auswahl bleiben soll. */
+  const [askAiFuture, setAskAiFuture] = useState<null | { title: string }>(null);
   const [portions, setPortions] = useState(2);
   const [comments, setComments] = useState<RecipeComment[]>([]);
   const [commentText, setCommentText] = useState('');
@@ -227,8 +235,8 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
     return (
       <div className="card p-6">
         <p className="text-sm font-medium text-danger">{error}</p>
-        <button className="btn btn-ghost mt-3" onClick={() => navigate('recipes')}>
-          <ArrowLeft className="h-4 w-4" /> Zurück zur Sammlung
+        <button className="btn btn-ghost mt-3" onClick={goBack}>
+          <ArrowLeft className="h-4 w-4" /> {fromWeek ? 'Zurück zur Woche' : 'Zurück zur Sammlung'}
         </button>
       </div>
     );
@@ -238,9 +246,26 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
 
   return (
     <div className="space-y-4">
+      {recipe?.aiExcluded && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-ink/10 bg-ink/5 px-3 py-2 text-xs text-ink/60">
+          <span>Nicht in der KI-Auswahl — dieses Gericht wird nicht mehr automatisch eingeplant.</span>
+          <button
+            className="font-semibold text-leaf underline"
+            onClick={() =>
+              void (async () => {
+                await api(`/recipes/${recipe.id}/ai-exclude`, { method: 'POST', body: { excluded: false } });
+                setRecipe({ ...recipe, aiExcluded: false });
+                setNotice('Wieder in der KI-Auswahl.');
+              })()
+            }
+          >
+            Wieder aufnehmen
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button className="btn btn-ghost btn-sm text-xs" onClick={() => navigate('recipes')}>
-          <ArrowLeft className="h-4 w-4" /> Sammlung
+        <button className="btn btn-ghost btn-sm text-xs" onClick={goBack}>
+          <ArrowLeft className="h-4 w-4" /> {backLabel}
         </button>
         <div className="flex flex-wrap items-center gap-2">
           {recipe && !editing && (
@@ -542,13 +567,67 @@ export function RecipeDetailPage({ recipeId }: { recipeId?: string }) {
             setEditing(true);
             setShowRefine(false);
             setNotice('Die KI hat das Rezept überarbeitet — bitte prüfen und speichern.');
+            if (recipeId) setAskAiFuture({ title: next.title || recipe?.title || 'Dieses Gericht' });
           }}
         />
       )}
 
       {ask.dialog}
+
+      {askAiFuture && recipeId && (
+        <AiFutureDialog
+          title={askAiFuture.title}
+          onDecide={(keep) => {
+            const label = askAiFuture.title;
+            setAskAiFuture(null);
+            void (async () => {
+              try {
+                await api(`/recipes/${recipeId}/ai-exclude`, { method: 'POST', body: { excluded: !keep } });
+                if (recipe) setRecipe({ ...recipe, aiExcluded: !keep });
+                setNotice(
+                  keep
+                    ? `„${label}“ kann weiterhin von der KI eingeplant werden.`
+                    : `„${label}“ wird nicht mehr automatisch eingeplant — in der Sammlung bleibt es erhalten.`,
+                );
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Auswahl konnte nicht gespeichert werden.');
+              }
+            })();
+          }}
+        />
+      )}
     </div>
   );
+}
+
+/**
+ * Frage nach dem Neuladen: Soll dieses Gericht künftig wieder in der KI-Auswahl landen?
+ * Beide Antworten sind gleichwertig — „Nein“ nimmt es nur aus der automatischen Planung.
+ */
+function AiFutureDialog({ title, onDecide }: { title: string; onDecide: (keep: boolean) => void }) {
+  const inhalt = (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6">
+      <div className="w-full max-w-md space-y-3 rounded-t-2xl border border-ink/10 bg-surface p-5 sm:rounded-2xl">
+        <p className="label !mb-0">Gericht neu geladen</p>
+        <p className="text-sm text-ink/75">
+          Soll <span className="font-semibold">„{title}“</span> künftig in der KI-Auswahl bleiben und wieder
+          eingeplant werden?
+        </p>
+        <p className="text-xs text-ink/50">
+          „Nein“ nimmt es nur aus der automatischen Planung — in der Sammlung bleibt es erhalten.
+        </p>
+        <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+          <button className="btn btn-primary flex-1" onClick={() => onDecide(true)}>
+            Ja, weiter einplanen
+          </button>
+          <button className="btn btn-ghost flex-1" onClick={() => onDecide(false)}>
+            Nein, nicht mehr
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  return typeof document === 'undefined' ? inhalt : createPortal(inhalt, document.body);
 }
 
 function RefineModal({

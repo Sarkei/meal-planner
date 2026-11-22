@@ -86,13 +86,13 @@ export function App() {
       case 'shopping':
         return <ShoppingPage />;
       case 'recipe':
-        return <RecipeDetailPage recipeId={route.id} />;
+        return <RecipeDetailPage recipeId={route.id} from={route.params.get('from') ?? ''} />;
       case 'household':
         return <HouseholdPage />;
       case 'settings':
         return <SettingsPage />;
       default:
-        return <WeekPage />;
+        return <WeekPage initialWeek={route.params.get('w') ?? undefined} />;
     }
   })();
 
