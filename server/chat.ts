@@ -267,11 +267,19 @@ const TOOLS: Array<Record<string, unknown>> = [
           tags: { type: 'array', items: { type: 'string' }, description: 'z. B. vegetarisch, asiatisch, schnell' },
           zutaten: {
             type: 'array',
-            description: 'Zutaten mit Menge und Einheit',
+            description:
+              'Zutaten mit Menge und Einheit. WICHTIG: Nur echte, gebräuchliche ' +
+              'Lebensmittelnamen verwenden — so wie sie im Supermarkt stehen. ' +
+              'Nudelsorten korrekt benennen (Penne, Spaghetti, Fusilli, Tagliatelle), ' +
+              'niemals Wortspiele oder erfundene Bezeichnungen wie "Penner Nudeln". ' +
+              'Im Zweifel den einfachen Grundbegriff nehmen ("Nudeln").',
             items: {
               type: 'object',
               properties: {
-                name: { type: 'string' },
+                name: {
+                  type: 'string',
+                  description: 'Gebräuchlicher Lebensmittelname, z. B. "Penne", "Hackfleisch gemischt"',
+                },
                 menge: { type: 'number' },
                 einheit: { type: 'string', description: 'g, ml, Stück, EL …' },
               },

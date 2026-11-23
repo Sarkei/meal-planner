@@ -387,25 +387,14 @@ export function WeekPage({ initialWeek }: { initialWeek?: string } = {}) {
                               ) : (
                                 <p className="truncate text-sm font-semibold">{entry.title}</p>
                               )}
-                              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/45">
-                                {(() => {
-                                  const slotLabel =
-                                    SLOTS.find((s) => s.id === String(entry.slot ?? ''))?.label ?? null;
-                                  return slotLabel ? (
-                                    <span className="rounded-full bg-leaf-soft px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-leaf">
-                                      {slotLabel}
-                                    </span>
-                                  ) : null;
-                                })()}
-                                <span>
-                                  {[
-                                    entry.prepMinutes ? `${entry.prepMinutes} min` : '',
-                                    entry.servings ? `${entry.servings} Port.` : '',
-                                    entry.nutrition?.kcal ? `${Math.round(Number(entry.nutrition.kcal))} kcal` : '',
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ') || 'ohne Angaben'}
-                                </span>
+                              <p className="mt-0.5 text-[11px] text-ink/45">
+                                {[
+                                  entry.prepMinutes ? `${entry.prepMinutes} min` : '',
+                                  entry.servings ? `${entry.servings} Port.` : '',
+                                  entry.nutrition?.kcal ? `${Math.round(Number(entry.nutrition.kcal))} kcal` : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ') || 'ohne Angaben'}
                               </p>
                             </div>
 
@@ -442,6 +431,16 @@ export function WeekPage({ initialWeek }: { initialWeek?: string } = {}) {
                               </button>
                             </div>
 
+                            {/* Mahlzeit-Kennzeichnung rechts neben Tauschen und Entfernen */}
+                            {(() => {
+                              const slotLabel =
+                                SLOTS.find((s) => s.id === String(entry.slot ?? ''))?.label ?? null;
+                              return slotLabel ? (
+                                <span className="shrink-0 rounded-full bg-leaf-soft px-2 py-1 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-leaf">
+                                  {slotLabel}
+                                </span>
+                              ) : null;
+                            })()}
                             <button
                               className="flex items-center gap-1 rounded-lg border border-ink/10 px-2 py-1.5 text-ink/55 transition hover:border-danger/30 hover:bg-danger-soft hover:text-clay disabled:opacity-40"
                               onClick={() => void removeEntry(entry)}
