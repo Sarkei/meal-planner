@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { initDb, pool } from './db';
 import { backfillRecipeMeta } from './recipeMeta';
 import { chatRouter } from './chat';
+import { connectRouter } from './connect';
 import { startScheduler } from './scheduler';
 import { attachUserFromToken, authRouter } from './auth';
 import { requireAuth } from './guards';
@@ -42,6 +43,8 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+// Kopplung mit anderen Apps: Code-basiert, ohne Login der Gegenstelle.
+app.use('/api/connect', connectRouter);
 // SSE: Token kommt als Query-Parameter, weil EventSource keine Header setzen kann.
 app.use('/api/events', eventsRouter);
 // Alles ab hier nur mit gültigem Token — die Routen selbst prüfen zusätzlich Haushaltsrechte.

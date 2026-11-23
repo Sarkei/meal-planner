@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../lib/auth';
 import { api, setToken } from '../lib/api';
 import { Collapsible } from '../components/Collapsible';
+import { ConnectCard } from '../components/ConnectCard';
 import {
   ALLERGY_OPTIONS as ALLERGY_OPTIONS_BASE,
   APPLIANCE_OPTIONS as APPLIANCE_OPTIONS_BASE,
@@ -598,6 +599,9 @@ export function SettingsPage() {
         </div>
         {deleteError && <p className="text-xs font-semibold text-red-600">{deleteError}</p>}
       </div>
+
+      {/* Kopplung mit anderen Apps */}
+      <ConnectCard />
 
       {ask.dialog}
     </div>
