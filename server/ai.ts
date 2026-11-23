@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from './db';
+import { einheitenFuerPrompt } from './einheiten';
 import { fail, requireHousehold, type AuthRequest } from './guards';
 import {
   aiRecipeSchema,
@@ -423,6 +424,7 @@ aiRouter.post('/recipe', async (req: AuthRequest, res) => {
       idea,
       servings: String(servings),
       constraints: constraintParts.join('; ') || 'keine besonderen Vorgaben',
+      einheiten: einheitenFuerPrompt(30),
     });
     const draft = normalizeRecipe(await generateValidated(prompt, aiRecipeSchema, 2, 90_000));
     const mode = body.save ?? 'favorite';
@@ -608,6 +610,7 @@ export async function planWeekForUser(
       servings: String(servings),
       slots: slots.map((s) => `${s} (${SLOTS.includes(s) ? s : ''})`).join(', '),
       constraints: constraintParts.join('; ') || 'keine besonderen Vorgaben',
+      einheiten: einheitenFuerPrompt(30),
       existingTitles: existingEntries.map((e) => e.title).join(', ') || 'keine',
       recentTitles: recentTitles.join(' | ') || 'keine',
       motto,

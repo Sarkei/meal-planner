@@ -4,6 +4,7 @@ import { fail, requireHousehold, type AuthRequest } from './guards';
 import type { Ingredient } from './recipeSchema';
 import { completeAiJson } from './ai';
 import { schaetzePreis } from './prices';
+import { standardMenge } from './einheiten';
 import { broadcast } from './events';
 
 export const CATEGORIES = [
@@ -386,6 +387,7 @@ async function rebuildAutoItems(householdId: string, weekStart: string): Promise
       if (!rawName) continue;
       const name = shoppingName(rawName);
       const unitKey = String(ing.unit ?? '').trim().toLowerCase();
+      const mengeRoh = typeof ing.amount === 'number' && Number.isFinite(ing.amount) ? ing.amount : null;
 
       /*
        * Immer in Gramm, wenn das Lebensmittel so verkauft wird.
@@ -395,11 +397,27 @@ async function rebuildAutoItems(householdId: string, weekStart: string): Promise
        * Gewicht verkauft wird, rechnen wir Stück in Gramm um, damit dieselbe
        * Zutat zu einer Zeile zusammenfällt.
        */
+      /*
+       * Einheit vereinheitlichen: jedes Lebensmittel hat genau eine Einheit,
+       * in der es überall geführt wird (Tomaten in g, Zwiebeln in Stück,
+       * Salz in TL). Das verhindert „Salz 1 TL" und „Salz 1 Prise" nebeneinander.
+       */
+      const standard = standardMenge(name, mengeRoh, unitKey);
+
       const grammProStueck = GRAMM_PRO_STUECK[name.toLowerCase()];
       let menge = typeof ing.amount === 'number' && Number.isFinite(ing.amount) ? ing.amount : null;
       let unitInfo = UNIT_FAMILIES[unitKey];
 
-      if (grammProStueck && (unitKey === 'stueck' || unitKey === 'stück') && menge != null) {
+      /*
+       * Erste Wahl: die vereinheitlichte Einheit aus der Tabelle.
+       * Nur wenn sie nichts liefert, greift die alte Stück→Gramm-Logik.
+       */
+      let einheitStd = unitKey;
+      if (standard) {
+        menge = standard.amount;
+        einheitStd = standard.einheit.toLowerCase();
+        unitInfo = UNIT_FAMILIES[einheitStd] ?? unitInfo;
+      } else if (grammProStueck && (unitKey === 'stueck' || unitKey === 'stück') && menge != null) {
         // Stück → Gramm: 3 Tomaten sind 3 × 80 g.
         menge = menge * grammProStueck;
         unitInfo = UNIT_FAMILIES.g;
@@ -415,12 +433,10 @@ async function rebuildAutoItems(householdId: string, weekStart: string): Promise
         continue;
       }
 
-      const family = unitInfo?.family ?? `eigen:${unitKey}`;
+      const family = unitInfo?.family ?? `eigen:${einheitStd}`;
       const key = `${name.toLowerCase()}|${family}`;
       const unitLabel =
-        unitKey === 'stueck' || unitKey === 'stück'
-          ? UNIT_LABELS[grammProStueck ? 'g' : unitKey] ?? String(ing.unit ?? '').trim()
-          : UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim();
+        UNIT_LABELS[einheitStd] ?? standard?.einheit ?? String(ing.unit ?? '').trim();
       const current =
         items.get(key) ?? { name, family, unit: unitLabel, base: 0, unknown: false };
       current.base += menge * factor * (unitInfo?.factor ?? 1);

@@ -8,6 +8,9 @@ BEREITS GEPLANTE GERICHTE DIESER WOCHE (nicht wiederholen): {{existingTitles}}
 IN DEN LETZTEN DREI WOCHEN GEKOCHT (auf keinen Fall wiederholen): {{recentTitles}}
 WOCHENMOTTO (grobe Richtung, nicht sklavisch): {{motto}}
 
+VERBINDLICHE EINHEITEN JE LEBENSMITTEL (halte dich exakt daran):
+{{einheiten}}
+
 REGELN
 0. **Die Zeile VORGABEN hat Vorrang vor allem anderen.** Steht dort eine Einschränkung wie „nur Fisch", „kein Fleisch", „vegetarisch", ein Zeitlimit oder ein Kalorienziel, dann richte dich zwingend danach — auch wenn es den übrigen Regeln widerspricht. Die Vorgaben sind der Auftrag des Nutzers.
 1. Antworte NUR mit JSON — kein Markdown, keine Erklärungen.
@@ -20,6 +23,7 @@ REGELN
 5a. Jedes Rezept braucht "prepMinutes" (Arbeitszeit), "totalMinutes" (inkl. Garen/Ruhen) und "difficulty" ("leicht" | "mittel" | "schwer").
 6. Vorgaben (Allergien, Diät, Kalorienziel, Zeitbudget) strikt einhalten.
 6a. NUR wenn in den Vorgaben eine Allergie/Unverträglichkeit oder eine Diät wie glutenfrei, laktosefrei oder vegan steht, verwendest du entsprechende Ersatzprodukte. Steht dort nichts, koche **normal**: Weizenmehl, Weizennudeln, Kuhmilch, Butter, Sahne, normaler Käse. Keine glutenfreien Nudeln/Mehle, keine laktosefreie Milch, keine Ersatzprodukte „nur so".
+6c. **Einheiten sind verbindlich.** Jede Zutat hat genau eine Einheit (siehe Liste oben). Verwende sie ausnahmslos — Salz immer in TL, Tomaten in g, Zwiebeln in Stück, Mehl in g. Keine Ausnahmen wie „Prise", „Spritzer", „cm" oder „nach Belieben".
 6b. Bevorzuge alltägliche Gerichte (Hausmannskost, was man sonst so kocht) mit Zutaten, die man üblicherweise zuhause hat — keine exotischen Spezialzutaten, keine Superfood-Zusätze, kein Chia/Quinoa/Tempeh, wenn es nicht verlangt wurde.
 7. "notes" enthält 2–4 Sätze auf Deutsch: worauf in dieser Woche zu achten ist (Mealprep, Reste, Einkauf).
 8. HALTE DICH KURZ — sonst wird die Antwort abgeschnitten und ist ungültig:
