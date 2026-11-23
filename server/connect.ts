@@ -168,7 +168,13 @@ connectRouter.get('/:code/week', async (req, res) => {
   const woche = String((req.query.w as string) ?? '') || montag();
   try {
     const plan = await loadPlan(treffer.household_id, woche);
-    const eintraege = (plan.entries as Array<Record<string, unknown>>).map((e) => ({
+    // Neueste Einträge zuerst: ist ein Tag doppelt belegt, gewinnt die letzte Planung.
+    const roh = [...(plan.entries as Array<Record<string, unknown>>)].sort((a, b) => {
+      const ta = new Date(String(a.createdAt ?? 0)).getTime();
+      const tb = new Date(String(b.createdAt ?? 0)).getTime();
+      return tb - ta;
+    });
+    const eintraege = roh.map((e) => ({
       tag: WOCHENTAGE[Number(e.dayIndex)] ?? '',
       tagIndex: e.dayIndex,
       mahlzeit: e.slot,
@@ -176,10 +182,43 @@ connectRouter.get('/:code/week', async (req, res) => {
       portionen: e.servings,
       kcal: (e.nutrition as Record<string, unknown> | null)?.kcal ?? null,
       protein: (e.nutrition as Record<string, unknown> | null)?.protein ?? null,
+      carbs: (e.nutrition as Record<string, unknown> | null)?.carbs ?? null,
+      fat: (e.nutrition as Record<string, unknown> | null)?.fat ?? null,
+      rezeptId: e.recipeId ?? null,
+      erstellt: e.createdAt ?? null,
     }));
     const kcalSumme = eintraege.reduce((s, e) => s + (Number(e.kcal) || 0), 0);
     res.json({ woche, anzahl: eintraege.length, kcalSumme, eintraege });
   } catch {
     fail(res, 500, 'plan-failed', 'Wochenplan konnte nicht geladen werden.');
   }
+});
+
+/**
+ * Einzelnes Rezept über den Kopplungscode — für die Detailkarte in der Gegenstelle
+ * (Zutaten, Zubereitung, Nährwerte). Nur Rezepte des gekoppelten Haushalts.
+ */
+connectRouter.get('/:code/recipe/:id', async (req, res) => {
+  const treffer = await codePruefen(String(req.params.code ?? '').trim());
+  if (!treffer) {
+    fail(res, 404, 'invalid-code', 'Der Kopplungscode ist ungültig oder wurde widerrufen.');
+    return;
+  }
+  const id = String(req.params.id ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    fail(res, 400, 'bad-id', 'Rezept-ID ungültig.');
+    return;
+  }
+  const r = await pool.query(
+    `SELECT id, title, description, servings, prep_minutes, total_minutes, difficulty,
+            tags, ingredients, steps, nutrition
+       FROM recipes
+      WHERE id = $1 AND household_id = $2`,
+    [id, treffer.household_id],
+  );
+  if (!r.rowCount) {
+    fail(res, 404, 'not-found', 'Rezept nicht gefunden.');
+    return;
+  }
+  res.json({ recipe: r.rows[0] });
 });

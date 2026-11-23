@@ -41,6 +41,7 @@ type EntryRow = {
   prep_minutes: number | null;
   tags: string[] | null;
   nutrition: Record<string, number> | null;
+  created_at: string | null;
 };
 
 export async function loadPlan(householdId: string, weekStart: string) {
@@ -50,7 +51,7 @@ export async function loadPlan(householdId: string, weekStart: string) {
   );
   if (!plan.rowCount) return { weekStart, planId: null, entries: [] as unknown[] };
   const entries = await pool.query<EntryRow>(
-    `SELECT e.id, e.day_index, e.position, e.slot, e.recipe_id, e.custom_title, e.servings,
+    `SELECT e.id, e.day_index, e.position, e.slot, e.recipe_id, e.custom_title, e.servings, e.created_at,
             r.title, r.servings AS recipe_servings, r.prep_minutes, r.tags, r.nutrition
        FROM plan_entries e
        LEFT JOIN recipes r ON r.id = e.recipe_id
@@ -73,6 +74,8 @@ export async function loadPlan(householdId: string, weekStart: string) {
       prepMinutes: e.prep_minutes,
       tags: e.tags ?? [],
       nutrition: e.nutrition ?? {},
+      /** Wann der Eintrag angelegt wurde — entscheidet bei Doppelbelegung, was gilt. */
+      createdAt: e.created_at ?? null,
     })),
   };
 }

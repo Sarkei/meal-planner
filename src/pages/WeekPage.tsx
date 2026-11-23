@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { addDays, api, formatDayMonth, formatWeekLabel, mondayOf, toYmd } from '../lib/api';
-import { WEEKDAYS, type PlanEntry, type Recipe, type WeekPlan } from '../lib/types';
+import { SLOTS, WEEKDAYS, type PlanEntry, type Recipe, type WeekPlan } from '../lib/types';
 import { useHouseholdEvents } from '../lib/useHouseholdEvents';
 import { Modal } from '../components/Modal';
 import { PlanWeekModal } from '../components/PlanWeekModal';
@@ -387,14 +387,25 @@ export function WeekPage({ initialWeek }: { initialWeek?: string } = {}) {
                               ) : (
                                 <p className="truncate text-sm font-semibold">{entry.title}</p>
                               )}
-                              <p className="mt-0.5 text-[11px] text-ink/45">
-                                {[
-                                  entry.prepMinutes ? `${entry.prepMinutes} min` : '',
-                                  entry.servings ? `${entry.servings} Port.` : '',
-                                  entry.nutrition?.kcal ? `${Math.round(Number(entry.nutrition.kcal))} kcal` : '',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' · ') || 'ohne Angaben'}
+                              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/45">
+                                {(() => {
+                                  const slotLabel =
+                                    SLOTS.find((s) => s.id === String(entry.slot ?? ''))?.label ?? null;
+                                  return slotLabel ? (
+                                    <span className="rounded-full bg-leaf-soft px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-leaf">
+                                      {slotLabel}
+                                    </span>
+                                  ) : null;
+                                })()}
+                                <span>
+                                  {[
+                                    entry.prepMinutes ? `${entry.prepMinutes} min` : '',
+                                    entry.servings ? `${entry.servings} Port.` : '',
+                                    entry.nutrition?.kcal ? `${Math.round(Number(entry.nutrition.kcal))} kcal` : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ') || 'ohne Angaben'}
+                                </span>
                               </p>
                             </div>
 
