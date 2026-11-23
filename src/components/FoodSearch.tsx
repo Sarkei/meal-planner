@@ -113,7 +113,7 @@ export function FoodSearch({ onPick }: { onPick: (hit: FoodHit, grams: number) =
 
       {scanned && (
         <div className="mt-2 rounded-lg border border-sage/40 bg-sage/10 p-2">
-          <p className="text-[13px] font-semibold">{scanned.name}</p>
+          <p className="text-[12px] font-semibold">{scanned.name}</p>
           <p className="text-[11px] text-ink/55">
             {scanned.brand || 'ohne Marke'} · {scanned.kcal ?? '—'} kcal / 100 g
           </p>
@@ -152,7 +152,7 @@ export function FoodSearch({ onPick }: { onPick: (hit: FoodHit, grams: number) =
             <li key={hit.barcode + hit.name}>
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[13px] hover:bg-sage/10"
+                className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[12px] hover:bg-sage/10"
                 onClick={() => {
                   onPick(hit, 100);
                   setQuery('');

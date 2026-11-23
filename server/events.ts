@@ -1,6 +1,7 @@
 import { Router, type Response } from 'express';
 import { pool } from './db';
 import { verifyToken } from './auth';
+import { sendeEreignis } from './push-route';
 
 /**
  * Server-Sent Events pro Haushalt: Die App abonniert einen Strom und lädt bei Änderungen nach.
@@ -20,7 +21,77 @@ export function subscribe(householdId: string, res: Response): () => void {
   };
 }
 
-export function broadcast(householdId: string, type: 'plan' | 'shopping' | 'recipe' | 'household'): void {
+/**
+ * Push an die anderen Haushaltsmitglieder.
+ *
+ * **Warum hier:** Jede Änderung — Plan, Einkauf, Rezept, Haushalt — läuft durch
+ * `broadcast`. Ein Haken an dieser Stelle deckt alle Wege ab, ohne in jedem
+ * Endpunkt einzeln zu benachrichtigen.
+ *
+ * Der Auslöser wird mitgegeben (`von`), damit niemand eine Meldung über die
+ * eigene Änderung bekommt.
+ */
+async function benachrichtigeHaushalt(
+  householdId: string,
+  type: 'plan' | 'shopping' | 'recipe' | 'household',
+  von: number | null,
+  detail?: { tag?: string; was?: string; aktion?: string },
+): Promise<void> {
+  try {
+    const r = await pool.query<{ user_id: number; name: string | null }>(
+      'SELECT user_id, display_name AS name FROM household_members WHERE household_id = $1',
+      [householdId],
+    );
+    const mitglieder = r.rows.filter((m) => Number(m.user_id) !== Number(von ?? -1));
+    if (!mitglieder.length) return;
+
+    const wer = von
+      ? (await pool.query<{ display_name: string | null }>('SELECT display_name FROM users WHERE id = $1', [von])).rows[0]?.display_name ?? 'Jemand'
+      : 'Jemand';
+
+    const meldung: Record<string, { titel: string; text: string }> = {
+      plan: {
+        titel: 'Wochenplan geändert',
+        text: detail?.was ?? `${wer} hat einen Tag im Wochenplan geändert.`,
+      },
+      shopping: {
+        titel: 'Einkaufsliste geändert',
+        text: detail?.was ?? `${wer} hat etwas auf die Einkaufsliste gesetzt.`,
+      },
+      recipe: {
+        titel: 'Rezept geändert',
+        text: detail?.was ?? `${wer} hat ein Rezept angepasst.`,
+      },
+      household: {
+        titel: 'Haushalt geändert',
+        text: detail?.was ?? `${wer} hat den Haushalt angepasst.`,
+      },
+    };
+
+    const m = meldung[type];
+    if (!m) return;
+
+    for (const g of mitglieder) {
+      // Jede Änderung nur einmal pro Minute und Typ melden — sonst kommt bei
+      // einem Plan-Lauf mit 7 Tagen sieben Nachrichten.
+      const schluessel = `${type}-${Math.floor(Date.now() / 60_000)}`;
+      void sendeEreignis(pool as never, g.user_id, `haushalt-${type}`, schluessel, {
+        titel: m.titel,
+        text: m.text,
+        url: 'https://meal-planner.nas-timgreen.com/',
+        tag: `haushalt-${type}`,
+      }).catch(() => undefined);
+    }
+  } catch {
+    /* Benachrichtigung darf nie eine Änderung blockieren */
+  }
+}
+
+export function broadcast(
+  householdId: string,
+  type: 'plan' | 'shopping' | 'recipe' | 'household',
+  optionen?: { von?: number | null; was?: string },
+): void {
   const group = clients.get(householdId);
   if (group) {
     const payload = `data: ${JSON.stringify({ type, at: Date.now() })}\n\n`;
@@ -34,6 +105,9 @@ export function broadcast(householdId: string, type: 'plan' | 'shopping' | 'reci
   }
   // Bei Planänderungen die gekoppelten Apps sofort benachrichtigen.
   if (type === 'plan') void benachrichtigeKopplungen(householdId);
+
+  // Und die anderen Haushaltsmitglieder per Push informieren.
+  void benachrichtigeHaushalt(householdId, type, optionen?.von ?? null, { was: optionen?.was });
 }
 
 /**

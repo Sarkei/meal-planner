@@ -771,7 +771,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
                 <li key={item.barcode + index} className="rounded-xl border border-ink/10 bg-surface/70 p-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold">{item.name}</p>
+                      <p className="truncate text-[12px] font-semibold">{item.name}</p>
                       <p className="text-[11px] text-ink/50">
                         {item.brand || 'ohne Marke'} · {item.kcal ?? '—'} kcal / 100 g
                       </p>
@@ -792,7 +792,7 @@ function NewRecipeModal({ onClose, onCreated }: { onClose: () => void; onCreated
                         const grams = Math.max(1, Number(e.target.value) || 1);
                         setItems(items.map((it, i) => (i === index ? { ...it, grams } : it)));
                       }}
-                      className="input !w-20 !py-1 text-center text-[13px]"
+                      className="input !w-20 !py-1 text-center text-[12px]"
                     />
                     <span className="text-[11px] text-ink/50">g</span>
                     <span className="ml-auto text-[11px] text-ink/50">

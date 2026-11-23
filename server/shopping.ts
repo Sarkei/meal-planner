@@ -593,7 +593,7 @@ shoppingRouter.post('/:householdId/:weekStart/items', async (req: AuthRequest, r
       req.userId,
     ],
   );
-  broadcast(req.params.householdId, 'shopping');
+  broadcast(req.params.householdId, 'shopping', { von: req.userId ?? null });
   res.status(201).json(await loadList(req.params.householdId, req.params.weekStart));
 });
 
@@ -613,7 +613,7 @@ shoppingRouter.patch('/:householdId/:weekStart/items/:itemId', async (req: AuthR
     fail(res, 404, 'not-found', 'Artikel nicht gefunden.');
     return;
   }
-  broadcast(req.params.householdId, 'shopping');
+  broadcast(req.params.householdId, 'shopping', { von: req.userId ?? null });
   res.json(await loadList(req.params.householdId, req.params.weekStart));
 });
 
@@ -627,6 +627,6 @@ shoppingRouter.delete('/:householdId/:weekStart/items/:itemId', async (req: Auth
     `DELETE FROM shopping_items WHERE id = $1 AND household_id = $2 AND week_start = $3 AND source = 'manual'`,
     [req.params.itemId, req.params.householdId, req.params.weekStart],
   );
-  broadcast(req.params.householdId, 'shopping');
+  broadcast(req.params.householdId, 'shopping', { von: req.userId ?? null });
   res.json(await loadList(req.params.householdId, req.params.weekStart));
 });

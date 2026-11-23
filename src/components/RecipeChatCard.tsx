@@ -92,7 +92,7 @@ export function RecipeChatCard({ recipe }: { recipe: Recipe }) {
           {messages.map((m, i) => (
             <div
               key={`${m.role}-${i}`}
-              className={`rounded-xl px-3 py-2 text-[13px] leading-relaxed ${
+              className={`rounded-xl px-3 py-2 text-[12px] leading-relaxed ${
                 m.role === 'user' ? 'ml-6 bg-sage/15' : 'mr-2 bg-ink/5'
               }`}
             >
@@ -100,7 +100,7 @@ export function RecipeChatCard({ recipe }: { recipe: Recipe }) {
             </div>
           ))}
           {busy && (
-            <div className="mr-2 flex items-center gap-2 rounded-xl bg-ink/5 px-3 py-2 text-[13px] text-ink/55">
+            <div className="mr-2 flex items-center gap-2 rounded-xl bg-ink/5 px-3 py-2 text-[12px] text-ink/55">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> überlegt …
             </div>
           )}

@@ -303,7 +303,7 @@ export function ChatPage() {
                     {eigen ? 'Du' : 'Assistent'}
                   </span>
                   <div
-                    className={`space-y-2 rounded-2xl px-4 py-2.5 text-[13.5px] leading-relaxed shadow-[0_1px_2px_rgb(15_23_42/0.06)] ${
+                    className={`space-y-2 rounded-2xl px-4 py-2.5 text-[12px] leading-relaxed shadow-[0_1px_2px_rgb(15_23_42/0.06)] ${
                       eigen ? 'rounded-br-md chat-bubble-me' : 'rounded-bl-md chat-bubble-coach'
                     }`}
                   >
@@ -339,7 +339,7 @@ export function ChatPage() {
 
         {busy && (
           <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-cream px-4 py-2.5 text-[13px] text-ink/60">
+            <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-cream px-4 py-2.5 text-[12px] text-ink/60">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> denkt nach …
             </div>
           </div>
@@ -387,7 +387,7 @@ export function ChatPage() {
           enterKeyHint="send"
           autoComplete="off"
           placeholder="Frag den Assistenten …"
-          className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-3 text-[13.5px] text-white placeholder:text-white/60 outline-none"
+          className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-3 text-[12px] text-white placeholder:text-white/60 outline-none"
         />
         <button
           type="submit"

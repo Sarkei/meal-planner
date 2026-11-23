@@ -135,7 +135,7 @@ plansRouter.post('/:householdId/:weekStart/entries', async (req: AuthRequest, re
      VALUES ($1,$2,'mahlzeit',$3,$4,$5,$6)`,
     [planId, dayIndex, next.rows[0].pos, recipeId ?? null, customTitle?.trim() || null, servings ?? null],
   );
-  broadcast(req.params.householdId, 'plan');
+  broadcast(req.params.householdId, 'plan', { von: req.userId ?? null });
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
@@ -157,7 +157,7 @@ plansRouter.patch('/:householdId/:weekStart/entries/:entryId', async (req: AuthR
       WHERE e.id = $2 AND e.plan_id = p.id AND p.household_id = $3 AND p.week_start = $4`,
     [servings ?? null, req.params.entryId, req.params.householdId, req.params.weekStart],
   );
-  broadcast(req.params.householdId, 'plan');
+  broadcast(req.params.householdId, 'plan', { von: req.userId ?? null });
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
@@ -207,7 +207,7 @@ plansRouter.put('/:householdId/:weekStart/reorder', async (req: AuthRequest, res
   } finally {
     client.release();
   }
-  broadcast(req.params.householdId, 'plan');
+  broadcast(req.params.householdId, 'plan', { von: req.userId ?? null });
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
 
@@ -226,7 +226,7 @@ plansRouter.delete('/:householdId/:weekStart', async (req: AuthRequest, res) => 
       WHERE e.plan_id = p.id AND p.household_id = $1 AND p.week_start = $2`,
     [req.params.householdId, req.params.weekStart],
   );
-  broadcast(req.params.householdId, 'plan');
+  broadcast(req.params.householdId, 'plan', { von: req.userId ?? null });
   res.json({ ...(await loadPlan(req.params.householdId, req.params.weekStart)), removed: removed.rowCount ?? 0 });
 });
 
@@ -241,6 +241,6 @@ plansRouter.delete('/:householdId/:weekStart/entry/:entryId', async (req: AuthRe
       WHERE e.id = $1 AND e.plan_id = p.id AND p.household_id = $2 AND p.week_start = $3`,
     [req.params.entryId, req.params.householdId, req.params.weekStart],
   );
-  broadcast(req.params.householdId, 'plan');
+  broadcast(req.params.householdId, 'plan', { von: req.userId ?? null });
   res.json(await loadPlan(req.params.householdId, req.params.weekStart));
 });
