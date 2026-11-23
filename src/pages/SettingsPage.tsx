@@ -26,6 +26,7 @@ import { SLOTS, type Slot, type UserSettings } from '../lib/types';
 import { TagListInput } from '../components/TagListInput';
 import { useConfirm } from '../components/ConfirmDialog';
 import PushoverKarte from '../components/PushoverKarte';
+import PushKarte from '../components/PushKarte';
 
 type Option = { value: string; label: string };
 
@@ -605,6 +606,8 @@ export function SettingsPage() {
       <ConnectCard />
 
       {/* Pushover: Benachrichtigungen aufs Handy */}
+      <PushKarte beschreibung="Nachrichten aufs Handy, auch wenn die App geschlossen ist." />
+      
       <PushoverKarte beschreibung="Pushover schickt dir eine Nachricht, wenn der Wochenplan steht. Beide Werte stehen in deinem Pushover-Konto." />
 
       {ask.dialog}

@@ -17,6 +17,7 @@ import { shoppingRouter } from './shopping';
 import { foodRouter } from './food';
 import { eventsRouter } from './events';
 import { pushoverRouter } from './pushover-route';
+import { pushRouter } from './push-route';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -60,6 +61,16 @@ app.use(
     titel: 'Meal Planner',
     text: 'Wenn du das siehst, funktionieren deine Benachrichtigungen.',
   }),
+);
+
+/*
+ * Web Push: Gerät anmelden, abmelden, testen.
+ * Läuft parallel zu Pushover.
+ */
+app.use(
+  '/api/push',
+  attachUserFromToken,
+  pushRouter(pool as never, (req) => (req as { userId?: number }).userId ?? null, 'Meal Planner'),
 );
 
 app.use('/api/households', requireAuth, householdsRouter);
