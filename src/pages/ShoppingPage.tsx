@@ -234,19 +234,15 @@ export function ShoppingPage() {
         <div className="grid gap-3 md:grid-cols-2">
           {grouped.map((group) => (
             <section key={group.id} className="card p-4">
-              {/* Kopf in derselben Spaltenaufteilung wie die Artikel-Zeilen: die
-                  Summe steht in der Mengen-Spalte, also dort wo unten „400 g" steht. */}
+              {/* Kopf in derselben Spaltenaufteilung wie die Artikel-Zeilen:
+                  „Summe:" steht in der Mengen-Spalte, der Betrag in der Preisspalte. */}
               <div className="mb-2 flex items-center gap-3">
                 <span className="h-5 w-5 shrink-0" aria-hidden="true" />
                 <h2 className="flex-1 font-display text-sm font-bold">{group.label}</h2>
-                <span className="text-right text-[11px] font-semibold tabular-nums text-ink/45">
-                  {group.sum > 0
-                    ? `Summe: ${formatEuro(group.sum)}`
-                    : group.id === 'gewuerze'
-                      ? 'Summe: —'
-                      : ''}
+                <span className="text-sm font-semibold text-ink/45">Summe:</span>
+                <span className="w-14 shrink-0 text-right text-[11px] font-semibold tabular-nums text-ink/45">
+                  {group.sum > 0 ? formatEuro(group.sum) : '—'}
                 </span>
-                <span className="w-14 shrink-0" aria-hidden="true" />
               </div>
               <ul className="divide-y divide-ink/5">
                 {group.items.map((item) => (
