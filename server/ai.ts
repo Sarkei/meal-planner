@@ -20,6 +20,7 @@ import { loadHouseholdPreferences as loadHouseholdRaw } from './householdPrefs';
 import { broadcast } from './events';
 import { resolveHousehold } from './recipes';
 import { prebuildNextWeek } from './scheduler';
+import { sendePushAnNutzer } from './push-route';
 
 type Provider = 'deepseek' | 'mistral' | 'gemini';
 
@@ -718,6 +719,20 @@ export async function planWeekForUser(
     }
     await logRun(userId, 'week-plan', true, started);
     broadcast(body.householdId!, 'plan');
+
+    /*
+     * Benachrichtigung, wenn der Plan steht.
+     *
+     * Die Generierung dauert bis zu vier Minuten — wer in der Zeit die App
+     * schließt, erfährt sonst nicht, dass der Plan fertig ist.
+     */
+    void sendePushAnNutzer(pool, userId, {
+      titel: 'Wochenplan ist fertig',
+      text: `${created + reused} Gerichte für die Woche ab ${weekStart}.`,
+      url: `https://meal-planner.nas-timgreen.com/#/week`,
+      tag: `plan-${weekStart}`,
+    }).catch(() => undefined);
+
     return {
       plan: await loadPlan(body.householdId!, weekStart),
       created,
