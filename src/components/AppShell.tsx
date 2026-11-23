@@ -45,7 +45,7 @@ export function AppShell({
     <div className="app">
       <header className="app-header">
         <div className="app-container app-header__inner">
-          <button className="app-brand" onClick={() => onNavigate(items[0]?.id ?? '')} aria-label={`${name} — Übersicht`}>
+          <button className="app-brand" onClick={() => onNavigate(items[0]?.id ?? '')} aria-label={`${name} — ${items[0]?.label ?? 'Start'}`}>
             {mark ? <span className="app-brand__mark">{mark}</span> : null}
             <span className="app-brand__text">
               {name}

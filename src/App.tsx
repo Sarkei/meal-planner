@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './lib/auth';
 import { AuthPage } from './pages/AuthPage';
-import { OverviewPage } from './pages/OverviewPage';
 import { WeekPage } from './pages/WeekPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
@@ -22,7 +21,9 @@ function parseHash(): Route {
   const path = qIndex >= 0 ? raw.slice(0, qIndex) : raw;
   const query = qIndex >= 0 ? raw.slice(qIndex + 1) : '';
   const [name, id] = path.split('/');
-  return { name: name || 'home', id, params: new URLSearchParams(query) };
+  // Die Woche ist die Startseite — alte Links auf die frühere Übersicht landen dort.
+  const start = !name || name === 'home' ? 'week' : name;
+  return { name: start, id, params: new URLSearchParams(query) };
 }
 
 export function navigate(path: string): void {
@@ -41,7 +42,6 @@ function useRoute(): Route {
 
 /** Bereiche der App — höchstens sieben, damit die Kopfzeile ruhig bleibt. */
 const NAV = [
-  { id: 'home', label: 'Übersicht' },
   { id: 'week', label: 'Woche' },
   { id: 'chat', label: 'Assistent' },
   { id: 'recipes', label: 'Rezepte' },
@@ -80,8 +80,6 @@ export function App() {
 
   const page = (() => {
     switch (route.name) {
-      case 'home':
-        return <OverviewPage />;
       case 'chat':
         return <ChatPage />;
       case 'recipes':
@@ -101,7 +99,6 @@ export function App() {
 
   const activeId = route.name === 'recipe' ? 'recipes' : route.name;
   const activeLabel = NAV.find((item) => item.id === activeId)?.label ?? 'Woche';
-
   const householdSelect =
     households.length > 1 ? (
       <select
@@ -162,7 +159,7 @@ export function App() {
         </div>
       }
     >
-      {route.name === 'home' ? (
+      {route.name === 'week' ? (
         page
       ) : (
         <div className="app-container pb-16 pt-6">{page}</div>
