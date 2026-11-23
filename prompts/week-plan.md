@@ -9,6 +9,7 @@ IN DEN LETZTEN DREI WOCHEN GEKOCHT (auf keinen Fall wiederholen): {{recentTitles
 WOCHENMOTTO (grobe Richtung, nicht sklavisch): {{motto}}
 
 REGELN
+0. **Die Zeile VORGABEN hat Vorrang vor allem anderen.** Steht dort eine Einschränkung wie „nur Fisch", „kein Fleisch", „vegetarisch", ein Zeitlimit oder ein Kalorienziel, dann richte dich zwingend danach — auch wenn es den übrigen Regeln widerspricht. Die Vorgaben sind der Auftrag des Nutzers.
 1. Antworte NUR mit JSON — kein Markdown, keine Erklärungen.
 2. dayIndex 0 = Montag bis 6 = Sonntag. Gib **nur** die Tage aus, die in den Vorgaben genannt sind, und lass keine leeren Tage im JSON (Tage ohne Mahlzeiten weglassen). Jeder ausgegebene Tag enthält alle gewünschten Mahlzeiten.
 3. Kein Gericht doppelt in der Woche, keine Varianten desselben Gerichts. Kein Titel aus der Liste der letzten drei Wochen — auch nicht leicht umbenannt („Hähnchen-Pfanne" ≠ „Hähnchenpfanne mit Reis").
@@ -21,6 +22,11 @@ REGELN
 6a. NUR wenn in den Vorgaben eine Allergie/Unverträglichkeit oder eine Diät wie glutenfrei, laktosefrei oder vegan steht, verwendest du entsprechende Ersatzprodukte. Steht dort nichts, koche **normal**: Weizenmehl, Weizennudeln, Kuhmilch, Butter, Sahne, normaler Käse. Keine glutenfreien Nudeln/Mehle, keine laktosefreie Milch, keine Ersatzprodukte „nur so".
 6b. Bevorzuge alltägliche Gerichte (Hausmannskost, was man sonst so kocht) mit Zutaten, die man üblicherweise zuhause hat — keine exotischen Spezialzutaten, keine Superfood-Zusätze, kein Chia/Quinoa/Tempeh, wenn es nicht verlangt wurde.
 7. "notes" enthält 2–4 Sätze auf Deutsch: worauf in dieser Woche zu achten ist (Mealprep, Reste, Einkauf).
+8. HALTE DICH KURZ — sonst wird die Antwort abgeschnitten und ist ungültig:
+   - "description": maximal 15 Wörter, ein Satz.
+   - "steps": 3–5 Schritte, jeder maximal 20 Wörter. Keine Einleitungen, keine Erklärungen.
+   - "notes": maximal 3 kurze Sätze.
+   - Keine Wiederholung von Zutaten in den Schritten.
 
 SCHEMA
 {"days":[{"dayIndex":0,"meals":[{"slot":"abend","recipe":{"title":"...","description":"...","servings":{{servings}},"prepMinutes":15,"totalMinutes":35,"difficulty":"leicht","tags":["..."],"ingredients":[{"name":"...","amount":200,"unit":"g"}],"steps":["..."],"nutrition":{"kcal":520,"protein":32,"carbs":48,"fat":20}}}]}],"notes":"..."}

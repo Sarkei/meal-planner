@@ -78,8 +78,9 @@ export function PlanWeekModal({
           servings,
           mode,
           mergeMembers: true,
-          // Freitext-Wünsche gehen als Vorliebe an die KI; leer = keine Vorgabe.
-          likes: wuensche.trim() ? [wuensche.trim()] : undefined,
+          // Freitext-Wünsche gehen als 'constraints' an die KI — das ist der Name,
+          // den der Server erwartet. 'likes' wurde ignoriert, die Eingabe kam nie an.
+          constraints: wuensche.trim() || undefined,
         },
       });
       onDone({ weekStart, created: data.created, reused: data.reused });

@@ -111,7 +111,9 @@ async function callOpenAiCompatible(
         { role: 'user', content: prompt },
       ],
       temperature,
-      max_tokens: 8000,
+      // 8000 reichte bei mehrtaegigen Plaenen nicht: die Antwort wurde mitten im
+      // Satz abgeschnitten und war dann ungueltiges JSON. DeepSeek erlaubt 8192.
+      max_tokens: 8192,
       response_format: { type: 'json_object' },
     }),
     signal: AbortSignal.timeout(timeoutMs),
