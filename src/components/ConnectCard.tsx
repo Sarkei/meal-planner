@@ -10,11 +10,20 @@ import { Check, Copy, Link2, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
-type CodeAntwort = { code: string | null; label?: string; created_at?: string; last_used_at?: string | null };
+type CodeAntwort = {
+  code: string | null;
+  connected?: boolean;
+  appName?: string;
+  label?: string;
+  created_at?: string;
+  last_used_at?: string | null;
+};
 
 export function ConnectCard() {
   const { activeHousehold } = useAuth();
   const [code, setCode] = useState<string | null>(null);
+  const [verbunden, setVerbunden] = useState(false);
+  const [appName, setAppName] = useState('Fitness-Tracker');
   const [zuletzt, setZuletzt] = useState<string | null>(null);
   const [laedt, setLaedt] = useState(true);
   const [arbeitet, setArbeitet] = useState(false);
@@ -26,6 +35,8 @@ export function ConnectCard() {
     try {
       const r = await api<CodeAntwort>('/connect/code');
       setCode(r.code ?? null);
+      setVerbunden(Boolean(r.connected));
+      setAppName(r.appName ?? r.label ?? 'Fitness-Tracker');
       setZuletzt(r.last_used_at ?? null);
     } catch (e) {
       setFehler(e instanceof Error ? e.message : 'Code konnte nicht geladen werden.');
@@ -34,9 +45,15 @@ export function ConnectCard() {
     }
   }, []);
 
+  // Regelmäßig nachsehen, ob die Gegenstelle den Code benutzt hat — dann steht hier
+  // „verbunden", ohne dass Tim die Seite neu laden muss.
   useEffect(() => {
     void laden();
-  }, [laden]);
+    const id = window.setInterval(() => {
+      if (!verbunden) void laden();
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, [laden, verbunden]);
 
   const erzeugen = async () => {
     if (!activeHousehold) return;
@@ -88,13 +105,27 @@ export function ConnectCard() {
           <Link2 className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-ink">Mit dem Fitness-Tracker verbinden</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold text-ink">Mit dem Fitness-Tracker verbinden</p>
+            {verbunden && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-leaf-soft px-2 py-0.5 text-[10px] font-semibold text-leaf">
+                <Check className="h-3 w-3" /> verbunden
+              </span>
+            )}
+          </div>
           <p className="mt-0.5 text-xs leading-relaxed text-ink/60">
-            Erzeuge hier einen Kopplungscode und trage ihn im Fitness-Tracker unter
-            Profil → Verbindungen ein. Freigegeben wird nur der Wochenplan.
+            {verbunden
+              ? `${appName} liest den Wochenplan. Änderungen kommen dort sofort an.`
+              : 'Erzeuge hier einen Kopplungscode und trage ihn im Fitness-Tracker unter Profil → Integrationen ein. Freigegeben wird nur der Wochenplan.'}
           </p>
         </div>
       </div>
+
+      {verbunden && zuletzt && (
+        <p className="rounded-lg bg-leaf-soft px-3 py-2 text-[11px] font-semibold text-leaf">
+          {appName} hat zuletzt gelesen: {new Date(zuletzt).toLocaleString('de-DE')}
+        </p>
+      )}
 
       {laedt ? (
         <p className="flex items-center gap-2 text-sm text-ink/50">

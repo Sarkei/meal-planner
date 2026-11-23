@@ -40,6 +40,9 @@ async function tabelleAnlegen(): Promise<void> {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS connect_codes_user_idx ON connect_codes (user_id)');
+  // Adresse der Gegenstelle für den Sofort-Abgleich bei Planänderungen.
+  await pool.query('ALTER TABLE connect_codes ADD COLUMN IF NOT EXISTS callback_url TEXT');
+  await pool.query('ALTER TABLE connect_codes ADD COLUMN IF NOT EXISTS app_name TEXT');
 }
 
 void tabelleAnlegen().catch((e) => console.error('connect_codes:', e));
@@ -54,19 +57,32 @@ function montag(): string {
 
 /* ---------------------------------------------------------------- Verwaltung */
 
-/** Eigenen Kopplungscode anzeigen oder erzeugen (nur mit Login). */
+/** Eigenen Kopplungscode samt Verbindungsstatus anzeigen (nur mit Login). */
 connectRouter.get('/code', requireAuth, async (req: AuthRequest, res) => {
   const row = await pool.query(
-    `SELECT code, label, created_at, last_used_at FROM connect_codes
+    `SELECT code, label, created_at, last_used_at, callback_url, app_name FROM connect_codes
       WHERE user_id = $1 AND revoked_at IS NULL
       ORDER BY created_at DESC LIMIT 1`,
     [req.userId],
   );
   if (!row.rows.length) {
-    res.json({ code: null });
+    res.json({ code: null, connected: false });
     return;
   }
-  res.json(row.rows[0]);
+  const r = row.rows[0] as {
+    code: string;
+    label: string | null;
+    created_at: string;
+    last_used_at: string | null;
+    callback_url: string | null;
+    app_name: string | null;
+  };
+  // "Verbunden" heißt: die Gegenstelle hat den Code schon benutzt.
+  res.json({
+    ...r,
+    connected: Boolean(r.last_used_at),
+    appName: r.app_name ?? r.label ?? 'Fitness-Tracker',
+  });
 });
 
 connectRouter.post('/code', requireAuth, async (req: AuthRequest, res) => {
@@ -117,12 +133,26 @@ async function codePruefen(code: string) {
   return r.rows[0] as { household_id: string; user_id: number };
 }
 
-/** Prüfung durch die Gegenstelle: existiert der Code, und welcher Haushalt gehört dazu? */
+/**
+ * Prüfung durch die Gegenstelle: existiert der Code?
+ * Dabei trägt die Gegenstelle ihre Adresse für den Sofort-Abgleich ein —
+ * das ist der einzige Schreibzugriff, den ein Kopplungscode erlaubt.
+ */
 connectRouter.get('/:code', async (req, res) => {
-  const treffer = await codePruefen(String(req.params.code ?? '').trim());
+  const code = String(req.params.code ?? '').trim();
+  const treffer = await codePruefen(code);
   if (!treffer) {
     fail(res, 404, 'invalid-code', 'Der Kopplungscode ist ungültig oder wurde widerrufen.');
     return;
+  }
+  const callback = String((req.query.callback as string) ?? '').trim();
+  const appName = String((req.query.app as string) ?? '').trim();
+  if (callback && /^https?:\/\//.test(callback)) {
+    await pool.query('UPDATE connect_codes SET callback_url = $2, app_name = $3 WHERE code = $1', [
+      code,
+      callback.replace(/\/$/, ''),
+      appName || 'Fitness-Tracker',
+    ]);
   }
   const h = await pool.query('SELECT name FROM households WHERE id = $1', [treffer.household_id]);
   res.json({ ok: true, householdName: h.rows[0]?.name ?? null });

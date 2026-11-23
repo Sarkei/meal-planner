@@ -22,14 +22,51 @@ export function subscribe(householdId: string, res: Response): () => void {
 
 export function broadcast(householdId: string, type: 'plan' | 'shopping' | 'recipe' | 'household'): void {
   const group = clients.get(householdId);
-  if (!group) return;
-  const payload = `data: ${JSON.stringify({ type, at: Date.now() })}\n\n`;
-  for (const client of group.values()) {
-    try {
-      client.res.write(payload);
-    } catch {
-      group.delete(client.id);
+  if (group) {
+    const payload = `data: ${JSON.stringify({ type, at: Date.now() })}\n\n`;
+    for (const client of group.values()) {
+      try {
+        client.res.write(payload);
+      } catch {
+        group.delete(client.id);
+      }
     }
+  }
+  // Bei Planänderungen die gekoppelten Apps sofort benachrichtigen.
+  if (type === 'plan') void benachrichtigeKopplungen(householdId);
+}
+
+/**
+ * Webhook an gekoppelte Apps (Fitness-Tracker).
+ *
+ * Die Gegenstelle trägt beim Verbinden ihre Adresse ein. Bei jeder Planänderung
+ * bekommt sie einen kurzen POST — damit ist der Wochenplan dort sofort aktuell,
+ * ohne auf ein Poll-Intervall zu warten. Fehler werden geschluckt: eine nicht
+ * erreichbare Gegenstelle darf das Speichern im Mealplanner nie stören.
+ */
+async function benachrichtigeKopplungen(householdId: string): Promise<void> {
+  try {
+    const rows = await pool.query<{ callback_url: string; code: string }>(
+      `SELECT callback_url, code FROM connect_codes
+        WHERE household_id = $1 AND revoked_at IS NULL AND callback_url IS NOT NULL`,
+      [householdId],
+    );
+    await Promise.all(
+      rows.rows.map(async ({ callback_url, code }) => {
+        try {
+          await fetch(callback_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'plan-changed', code, householdId, at: Date.now() }),
+            signal: AbortSignal.timeout(5000),
+          });
+        } catch {
+          /* Gegenstelle offline — der nächste Abruf holt es nach. */
+        }
+      }),
+    );
+  } catch {
+    /* Tabelle fehlt oder DB weg: Webhook ist nur Beschleuniger, nie Voraussetzung. */
   }
 }
 
