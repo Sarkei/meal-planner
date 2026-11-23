@@ -686,13 +686,18 @@ chatRouter.post('/', async (req: AuthRequest, res) => {
     }
 
     if (!reply) reply = 'Erledigt.';
-    await pool.query('INSERT INTO chat_messages (user_id, role, content, actions) VALUES ($1,$2,$3,$4::jsonb)', [
-      req.userId,
-      'assistant',
+    const gespeichert = await pool.query(
+      `INSERT INTO chat_messages (user_id, role, content, actions) VALUES ($1,$2,$3,$4::jsonb)
+       RETURNING id, created_at`,
+      [req.userId, 'assistant', reply, JSON.stringify(actions)],
+    );
+    // Zeitstempel mitgeben: die Oberflaeche zeigt Uhrzeit und Tages-Trenner wie im Coach-Chat.
+    res.json({
       reply,
-      JSON.stringify(actions),
-    ]);
-    res.json({ reply, actions });
+      actions,
+      id: gespeichert.rows[0]?.id ?? null,
+      createdAt: gespeichert.rows[0]?.created_at ?? null,
+    });
   } catch (error) {
     fail(res, 502, 'ai-failed', error instanceof Error ? error.message.slice(0, 300) : 'Der Assistent konnte nicht antworten.');
   }
