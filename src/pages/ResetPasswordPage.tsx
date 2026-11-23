@@ -38,7 +38,7 @@ export function ResetPasswordPage({ token }: { token: string }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl border border-ink/10 bg-white p-7 shadow-xl">
+      <div className="w-full max-w-md rounded-3xl border border-line bg-surface p-7 shadow-xl text-ink">
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-leaf text-white">
             <CookingPot className="h-5 w-5" />
