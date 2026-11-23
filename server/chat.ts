@@ -8,6 +8,7 @@ import type { HouseholdPreferences } from './householdPrefs';
 import { loadPlan } from './plans';
 import { broadcast } from './events';
 import { resolveHousehold } from './recipes';
+import { normalizeRecipe, recipeInputSchema } from './recipeSchema';
 import { guessCategory } from './shopping';
 import { planWeekForUser, resolveProvider, WeekPlanError, type WeekPlanBody } from './ai';
 
@@ -243,6 +244,51 @@ const TOOLS: Array<Record<string, unknown>> = [
         type: 'object',
         properties: { name: { type: 'string' }, menge: { type: 'number' }, einheit: { type: 'string' } },
         required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rezept_anlegen',
+      description:
+        'Legt ein neues Rezept in der Sammlung an. Zutaten und Schritte sind Pflicht. ' +
+        'Nutze dieses Werkzeug, wenn der Nutzer ein Rezept neu erstellen will — auch wenn er es nur beschreibt. ' +
+        'Vorher ggf. rezepte_suchen, um Dubletten zu vermeiden.',
+      parameters: {
+        type: 'object',
+        properties: {
+          titel: { type: 'string', description: 'Name des Gerichts' },
+          beschreibung: { type: 'string', description: 'Ein bis drei Sätze zum Gericht' },
+          portionen: { type: 'integer', description: 'Für wie viele Personen (Standard 2)' },
+          vorbereitung_minuten: { type: 'integer' },
+          gesamtzeit_minuten: { type: 'integer' },
+          schwierigkeit: { type: 'string', enum: ['leicht', 'mittel', 'schwer'] },
+          tags: { type: 'array', items: { type: 'string' }, description: 'z. B. vegetarisch, asiatisch, schnell' },
+          zutaten: {
+            type: 'array',
+            description: 'Zutaten mit Menge und Einheit',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                menge: { type: 'number' },
+                einheit: { type: 'string', description: 'g, ml, Stück, EL …' },
+              },
+              required: ['name'],
+            },
+          },
+          schritte: {
+            type: 'array',
+            description: 'Arbeitsschritte in der richtigen Reihenfolge',
+            items: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+          },
+          kcal: { type: 'integer', description: 'kcal pro Portion' },
+          protein: { type: 'number' },
+          kohlenhydrate: { type: 'number' },
+          fett: { type: 'number' },
+        },
+        required: ['titel', 'zutaten', 'schritte'],
       },
     },
   },
@@ -538,6 +584,76 @@ async function toolShoppingAdd(ctx: Ctx, a: Record<string, unknown>) {
   return { ok: true, name };
 }
 
+/**
+ * Legt ein Rezept aus der Chat-Beschreibung an.
+ * Läuft durch dieselbe Prüfung wie der Rezept-Editor (`recipeInputSchema`), damit
+ * per Chat nichts entsteht, was die Oberfläche später nicht laden kann.
+ */
+async function toolCreateRecipe(ctx: Ctx, a: Record<string, unknown>) {
+  const roh = {
+    title: String(a.titel ?? a.title ?? '').trim(),
+    description: String(a.beschreibung ?? a.description ?? '').trim(),
+    servings: Number(a.portionen ?? a.servings) || 2,
+    prepMinutes: a.vorbereitung_minuten ?? a.prepMinutes ?? null,
+    totalMinutes: a.gesamtzeit_minuten ?? a.totalMinutes ?? null,
+    difficulty: a.schwierigkeit ?? a.difficulty ?? null,
+    tags: Array.isArray(a.tags) ? a.tags : [],
+    ingredients: Array.isArray(a.zutaten)
+      ? (a.zutaten as Array<Record<string, unknown>>).map((z) => ({
+          name: String(z.name ?? '').trim(),
+          amount: z.menge ?? z.amount ?? null,
+          unit: z.einheit ?? z.unit ?? '',
+        }))
+      : [],
+    steps: Array.isArray(a.schritte)
+      ? (a.schritte as unknown[]).map((s) =>
+          typeof s === 'string' ? { text: s } : { text: String((s as Record<string, unknown>)?.text ?? '') },
+        )
+      : [],
+    nutrition: {
+      kcal: a.kcal ?? undefined,
+      protein: a.protein ?? undefined,
+      carbs: a.kohlenhydrate ?? a.carbs ?? undefined,
+      fat: a.fett ?? a.fat ?? undefined,
+    },
+  };
+
+  const parsed = recipeInputSchema.safeParse(roh);
+  if (!parsed.success) {
+    return { fehler: parsed.error.issues[0]?.message ?? 'Rezept unvollständig' };
+  }
+  if (!ctx.householdId) return { fehler: 'Du bist in keinem Haushalt.' };
+  const recipe = normalizeRecipe(parsed.data);
+  const created = await pool.query<{ id: string }>(
+    `INSERT INTO recipes (household_id, owner_id, title, description, servings, prep_minutes, total_minutes, difficulty, image_url, tags, source, ingredients, steps, nutrition)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ai',$11::jsonb,$12::jsonb,$13::jsonb)
+     RETURNING id`,
+    [
+      ctx.householdId,
+      ctx.userId,
+      recipe.title,
+      recipe.description,
+      recipe.servings,
+      recipe.prepMinutes,
+      recipe.totalMinutes,
+      recipe.difficulty,
+      recipe.imageUrl,
+      recipe.tags,
+      JSON.stringify(recipe.ingredients),
+      JSON.stringify(recipe.steps),
+      JSON.stringify(recipe.nutrition),
+    ],
+  );
+  broadcast(ctx.householdId, 'recipe');
+  return {
+    ok: true,
+    id: created.rows[0]?.id ?? null,
+    titel: recipe.title,
+    zutaten: recipe.ingredients.length,
+    schritte: recipe.steps.length,
+  };
+}
+
 type Handler = (ctx: Ctx, args: Record<string, unknown>) => Promise<unknown>;
 
 const HANDLERS: Record<string, { run: Handler; summary: (result: Record<string, unknown>, args: Record<string, unknown>) => string }> = {
@@ -556,6 +672,7 @@ const HANDLERS: Record<string, { run: Handler; summary: (result: Record<string, 
   favorit_setzen: { run: toolFavorite, summary: (r, a) => (a.favorit ? 'als Favorit gemerkt' : 'aus Favoriten entfernt') },
   einkaufsliste_lesen: { run: toolShoppingRead, summary: (r) => `Einkaufsliste gelesen (${r.anzahl ?? 0})` },
   einkauf_hinzufuegen: { run: toolShoppingAdd, summary: (r, a) => `„${a.name}" auf die Einkaufsliste` },
+  rezept_anlegen: { run: toolCreateRecipe, summary: (r, a) => `Rezept „${a.titel}" angelegt` },
 };
 
 /* ------------------------------------------------------------------ Modellaufruf */
@@ -635,6 +752,7 @@ chatRouter.post('/', async (req: AuthRequest, res) => {
     '- Nutze die Werkzeuge, statt zu raten. Vor Änderungen am Wochenplan liest du ihn, wenn du Einträge entfernen willst.',
     '- Bei „das gefällt mir nicht" handle selbst: entferne die betroffenen Einträge bzw. plane passend neu, statt nur zu erklären.',
     '- Rezept-IDs nur aus Werkzeug-Ergebnissen verwenden, niemals erfinden.',
+    '- Will die Person ein neues Rezept, legst du es mit rezept_anlegen an — mit Zutaten (Menge und Einheit) und Schritten. Nicht nur beschreiben, wirklich anlegen.',
     '- Nach den Aktionen: ein bis drei Sätze, was du geändert hast. Keine Aufzählung der Werkzeugnamen.',
     '- Wenn etwas unklar ist, frage einmal kurz nach, statt zu raten.',
     '- Ohne eingestellte Allergien/Unverträglichkeiten keine Ersatzprodukte vorschlagen (nicht glutenfrei, nicht laktosefrei, nicht vegan) — normale Zutaten, alltägliche Gerichte.',

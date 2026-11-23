@@ -19,44 +19,123 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Zwischenspeicher für Leseanfragen.
+ *
+ * Die App lädt beim Start alle Bereiche vor (`prefetchBereiche`). Wechselt man danach
+ * den Tab, kommen die Daten sofort aus dem Speicher — kein Ladezustand, kein Flackern.
+ * Jede schreibende Anfrage (POST/PATCH/PUT/DELETE) verwirft den Speicher, damit nie
+ * veraltete Daten stehen bleiben.
+ */
+type CacheEintrag = { zurueckgegeben: number; daten: unknown };
+
+const cache = new Map<string, CacheEintrag>();
+/** Wie lange ein Eintrag als frisch gilt (ms). Danach wird neu geladen. */
+const CACHE_TTL = 60_000;
+/** Laufende Anfragen — verhindert doppelte Aufrufe bei schnellem Tab-Wechsel. */
+const laufend = new Map<string, Promise<unknown>>();
+
+export function cacheLeeren(): void {
+  cache.clear();
+}
+
+function cacheKey(path: string): string {
+  return path;
+}
+
 export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`/api${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    // Strings werden unverändert gesendet — sonst entsteht doppelt kodiertes JSON
-    body:
-      options.body === undefined
-        ? undefined
-        : typeof options.body === 'string'
-          ? options.body
-          : JSON.stringify(options.body),
-  });
-  const text = await res.text();
-  // Kein JSON (z. B. 502-HTML vom Proxy): verständliche Meldung statt JSON.parse-Absturz
-  let data: unknown = {};
-  if (text) {
+  const method = (options.method ?? 'GET').toUpperCase();
+  const key = cacheKey(path);
+  const istLesen = method === 'GET';
+
+  if (istLesen) {
+    const treffer = cache.get(key);
+    if (treffer && Date.now() - treffer.zurueckgegeben < CACHE_TTL) {
+      return treffer.daten as T;
+    }
+    const offen = laufend.get(key);
+    if (offen) return offen as Promise<T>;
+  } else {
+    // Schreibzugriff: alles Gespeicherte ist potenziell veraltet.
+    cacheLeeren();
+  }
+
+  const anfrage = (async () => {
+    const token = getToken();
+    const res = await fetch(`/api${path}`, {
+      method,
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      // Strings werden unverändert gesendet — sonst entsteht doppelt kodiertes JSON
+      body:
+        options.body === undefined
+          ? undefined
+          : typeof options.body === 'string'
+            ? options.body
+            : JSON.stringify(options.body),
+    });
+    const text = await res.text();
+    // Kein JSON (z. B. 502-HTML vom Proxy): verständliche Meldung statt JSON.parse-Absturz
+    let data: unknown = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new ApiError(
+          res.status,
+          'bad-gateway',
+          res.status === 502 || res.status === 504
+            ? 'Der Server hat zu lange gebraucht. Bitte noch einmal versuchen.'
+            : 'Der Server hat unerwartet geantwortet (keine JSON-Daten).',
+        );
+      }
+    }
+    if (!res.ok) {
+      const err = data as { error?: string; message?: string };
+      throw new ApiError(res.status, err.error ?? 'error', err.message ?? `Fehler ${res.status}`);
+    }
+    if (istLesen) cache.set(key, { zurueckgegeben: Date.now(), daten: data });
+    return data as T;
+  })();
+
+  if (istLesen) {
+    laufend.set(key, anfrage);
     try {
-      data = JSON.parse(text);
-    } catch {
-      throw new ApiError(
-        res.status,
-        'bad-gateway',
-        res.status === 502 || res.status === 504
-          ? 'Der Server hat zu lange gebraucht. Bitte noch einmal versuchen.'
-          : 'Der Server hat unerwartet geantwortet (keine JSON-Daten).',
-      );
+      return (await anfrage) as T;
+    } finally {
+      laufend.delete(key);
     }
   }
-  if (!res.ok) {
-    const err = data as { error?: string; message?: string };
-    throw new ApiError(res.status, err.error ?? 'error', err.message ?? `Fehler ${res.status}`);
-  }
-  return data as T;
+  return (await anfrage) as T;
 }
+
+/**
+ * Lädt die Bereiche im Hintergrund vor, damit Tab-Wechsel ohne Wartezeit laufen.
+ * Bewusst nacheinander und ohne Fehlerabbruch: ein kaputter Endpunkt darf die
+ * übrigen Vorladungen nicht verhindern.
+ */
+export async function prefetchBereiche(householdId?: string | null): Promise<void> {
+  const montag = mondayOf(new Date());
+  const pfade = [
+    '/recipes/facets',
+    '/recipes?limit=60',
+    '/settings',
+    householdId ? `/households/${householdId}/preferences` : null,
+    householdId ? `/plans/${householdId}/${montag}` : null,
+    householdId ? `/shopping/${householdId}/${montag}` : null,
+  ].filter((p): p is string => Boolean(p));
+
+  for (const pfad of pfade) {
+    try {
+      await api(pfad);
+    } catch {
+      /* einzeln ignorieren */
+    }
+  }
+}
+
 
 /** Montag der Woche, in der `date` liegt — als YYYY-MM-DD (lokale Zeit). */
 export function mondayOf(date: Date): string {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './lib/auth';
+import { prefetchBereiche } from './lib/api';
 import { AuthPage } from './pages/AuthPage';
 import { WeekPage } from './pages/WeekPage';
 import { RecipesPage } from './pages/RecipesPage';
@@ -58,6 +59,12 @@ export function App() {
   useEffect(() => {
     setIsDark(document.documentElement.dataset.theme === 'dark');
   }, [settings.theme]);
+
+  // Alle Bereiche einmal im Hintergrund laden, damit Tab-Wechsel ohne Wartezeit laufen.
+  useEffect(() => {
+    if (!user || !activeHousehold) return;
+    void prefetchBereiche(activeHousehold.id);
+  }, [user, activeHousehold]);
 
   if (route.name === 'reset') {
     const token = route.params.get('token') ?? '';

@@ -37,6 +37,7 @@ const TOOL_LABELS: Record<string, string> = {
   favorit_setzen: 'Favorit geändert',
   einkaufsliste_lesen: 'Einkaufsliste gelesen',
   einkauf_hinzufuegen: 'Artikel ergänzt',
+  rezept_anlegen: 'Rezept angelegt',
 };
 
 /** Tagesschlüssel in lokaler Zeit (YYYY-MM-DD) für die Datums-Trenner. */
@@ -303,9 +304,7 @@ export function ChatPage() {
                   </span>
                   <div
                     className={`space-y-2 rounded-2xl px-4 py-2.5 text-[13.5px] leading-relaxed shadow-[0_1px_2px_rgb(15_23_42/0.06)] ${
-                      eigen
-                        ? 'rounded-br-md bg-leaf text-on-accent'
-                        : 'rounded-bl-md bg-cream text-ink/85'
+                      eigen ? 'rounded-br-md chat-bubble-me' : 'rounded-bl-md chat-bubble-coach'
                     }`}
                   >
                     {eigen ? (
@@ -328,7 +327,7 @@ export function ChatPage() {
                         ))}
                       </div>
                     )}
-                    <p className={`text-right text-[10px] tabular-nums ${eigen ? 'text-white/60' : 'text-ink/40'}`}>
+                    <p className={`text-right text-[10px] tabular-nums ${eigen ? 'chat-time-me' : 'chat-time'}`}>
                       {zeitLabel(m.created_at)}
                     </p>
                   </div>
@@ -359,7 +358,7 @@ export function ChatPage() {
           e.preventDefault();
           void send(draft);
         }}
-        className="mt-1 flex shrink-0 items-end gap-2 rounded-2xl bg-ink p-2 shadow-[0_2px_8px_rgb(15_23_42/0.12)]"
+        className="mt-1 flex shrink-0 items-end gap-2 rounded-2xl chat-input-box p-2 shadow-[0_2px_8px_rgb(15_23_42/0.12)]"
       >
         <textarea
           ref={inputRef}

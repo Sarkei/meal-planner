@@ -607,3 +607,58 @@ body {
   color: var(--ink);
 }
 .btn-outline:hover { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+/* ---- Assistent-Chat: Farben wie im Fitness-Tracker-Coach-Chat --------------
+   Beide Blasen sind dunkel; der Unterschied kommt über die Stufe, nicht über
+   Helligkeit. Werte vom Coach-Chat übernommen (dort auf Kontrast geprüft:
+   Abstand der Blasen 2,6:1, weiße Schrift 14,7:1, Uhrzeit 5,7:1). */
+
+.chat-bubble-coach,
+.chat-input-box {
+  background: #0b2e1f;
+  color: #ffffff;
+}
+
+.chat-bubble-me {
+  background: #24744f;
+  color: #ffffff;
+}
+
+/* Eingabefeld minimal heller als der Coach-Ton, mit Kante. */
+.chat-input-box {
+  background: #11402c;
+  border: 1px solid #2a6a4d;
+}
+
+.chat-input-box textarea {
+  color: #ffffff;
+}
+
+.chat-input-box textarea::placeholder {
+  color: rgb(255 255 255 / 0.7);
+}
+
+/* Uhrzeit braucht auf dem helleren Eigen-Ton volle Deckkraft (WCAG AA). */
+.chat-time {
+  color: rgb(255 255 255 / 0.8);
+}
+
+.chat-time-me {
+  color: rgb(255 255 255 / 0.92);
+}
+
+/* Im hellen Theme dieselbe Logik, nur kräftigere Töne. */
+html[data-theme='light'] .chat-bubble-coach,
+html[data-theme='light'] .chat-input-box {
+  background: #1f6b4a;
+  color: #ffffff;
+}
+
+html[data-theme='light'] .chat-input-box {
+  border-color: #2f8c62;
+}
+
+html[data-theme='light'] .chat-bubble-me {
+  background: #2f8c62;
+  color: #ffffff;
+}
