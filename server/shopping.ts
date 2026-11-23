@@ -303,6 +303,69 @@ function displayAmount(family: string, total: number, fallbackUnit: string): { a
   return { amount: roundNice(total), unit: fallbackUnit };
 }
 
+/**
+ * Durchschnittsgewicht je Stück (in Gramm) für Lebensmittel, die im Supermarkt
+ * nach Gewicht verkauft werden.
+ *
+ * Zweck: „3 Tomaten" und „400 g Tomaten" sind dieselbe Zutat und müssen zu einer
+ * Zeile zusammenfallen. Ohne Umrechnung stehen sie doppelt auf der Liste, weil
+ * die Einheiten-Familie unterschiedlich ist (Stück vs. Gewicht).
+ */
+const GRAMM_PRO_STUECK: Record<string, number> = {
+  tomate: 80,
+  tomaten: 80,
+  'kirschtomate': 15,
+  'kirschtomaten': 15,
+  'rispentomate': 90,
+  'rispentomaten': 90,
+  kartoffel: 150,
+  kartoffeln: 150,
+  zwiebel: 110,
+  zwiebeln: 110,
+  'rote zwiebel': 110,
+  'rote zwiebeln': 110,
+  möhre: 80,
+  möhren: 80,
+  karotte: 80,
+  karotten: 80,
+  gurke: 400,
+  salatgurke: 400,
+  paprika: 180,
+  'paprika (rot)': 180,
+  'paprika (gelb)': 180,
+  'paprika (grün)': 180,
+  zucchini: 250,
+  aubergine: 300,
+  'süßkartoffel': 250,
+  'süßkartoffeln': 250,
+  apfel: 150,
+  äpfel: 150,
+  birne: 180,
+  birnen: 180,
+  banane: 120,
+  bananen: 120,
+  orange: 180,
+  orangen: 180,
+  zitrone: 100,
+  zitronen: 100,
+  limette: 70,
+  limetten: 70,
+  avocado: 200,
+  lauch: 200,
+  'stange lauch': 200,
+  sellerie: 400,
+  'stange sellerie': 400,
+  brokkoli: 400,
+  blumenkohl: 600,
+  champignon: 15,
+  champignons: 15,
+  knoblauchzehe: 5,
+  knoblauchzehen: 5,
+  'pute': 200,
+  ei: 55,
+  eier: 55,
+};
+
 /** Automatische Artikel aus dem Wochenplan neu berechnen (Prüfstatus und manuelle Artikel bleiben). */
 async function rebuildAutoItems(householdId: string, weekStart: string): Promise<void> {
   const rows = await pool.query<{ servings: number; entry_servings: number | null; ingredients: Ingredient[] }>(
@@ -323,17 +386,44 @@ async function rebuildAutoItems(householdId: string, weekStart: string): Promise
       if (!rawName) continue;
       const name = shoppingName(rawName);
       const unitKey = String(ing.unit ?? '').trim().toLowerCase();
-      const unitInfo = UNIT_FAMILIES[unitKey];
+
+      /*
+       * Immer in Gramm, wenn das Lebensmittel so verkauft wird.
+       *
+       * Tim kauft Tomaten in Schalen, nicht nach Stück — „3 Stück" und „400 g"
+       * standen vorher als zwei Positionen auf der Liste. Für alles, was nach
+       * Gewicht verkauft wird, rechnen wir Stück in Gramm um, damit dieselbe
+       * Zutat zu einer Zeile zusammenfällt.
+       */
+      const grammProStueck = GRAMM_PRO_STUECK[name.toLowerCase()];
+      let menge = typeof ing.amount === 'number' && Number.isFinite(ing.amount) ? ing.amount : null;
+      let unitInfo = UNIT_FAMILIES[unitKey];
+
+      if (grammProStueck && (unitKey === 'stueck' || unitKey === 'stück') && menge != null) {
+        // Stück → Gramm: 3 Tomaten sind 3 × 80 g.
+        menge = menge * grammProStueck;
+        unitInfo = UNIT_FAMILIES.g;
+      }
+
+      if (menge == null) {
+        const keyLeer = `${name.toLowerCase()}|${unitInfo?.family ?? `eigen:${unitKey}`}`;
+        const vorhanden =
+          items.get(keyLeer) ??
+          { name, family: unitInfo?.family ?? `eigen:${unitKey}`, unit: UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim(), base: 0, unknown: false };
+        vorhanden.unknown = true;
+        items.set(keyLeer, vorhanden);
+        continue;
+      }
+
       const family = unitInfo?.family ?? `eigen:${unitKey}`;
       const key = `${name.toLowerCase()}|${family}`;
-      const unitLabel = UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim();
+      const unitLabel =
+        unitKey === 'stueck' || unitKey === 'stück'
+          ? UNIT_LABELS[grammProStueck ? 'g' : unitKey] ?? String(ing.unit ?? '').trim()
+          : UNIT_LABELS[unitKey] ?? String(ing.unit ?? '').trim();
       const current =
         items.get(key) ?? { name, family, unit: unitLabel, base: 0, unknown: false };
-      if (typeof ing.amount === 'number' && Number.isFinite(ing.amount)) {
-        current.base += ing.amount * factor * (unitInfo?.factor ?? 1);
-      } else {
-        current.unknown = true;
-      }
+      current.base += menge * factor * (unitInfo?.factor ?? 1);
       items.set(key, current);
     }
   }

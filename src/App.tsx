@@ -42,11 +42,15 @@ function useRoute(): Route {
 }
 
 /** Bereiche der App — höchstens sieben, damit die Kopfzeile ruhig bleibt. */
+/*
+ * Reihenfolge nach Tims Ablauf: erst die Woche, dann was man dafür einkauft,
+ * dann die Rezepte, der Assistent, der Haushalt und zuletzt die Einstellungen.
+ */
 const NAV = [
   { id: 'week', label: 'Woche' },
-  { id: 'chat', label: 'Assistent' },
-  { id: 'recipes', label: 'Rezepte' },
   { id: 'shopping', label: 'Einkauf' },
+  { id: 'recipes', label: 'Rezepte' },
+  { id: 'chat', label: 'Assistent' },
   { id: 'household', label: 'Haushalt' },
   { id: 'settings', label: 'Profil' },
 ];

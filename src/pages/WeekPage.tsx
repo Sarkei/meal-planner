@@ -95,6 +95,10 @@ export function WeekPage({ initialWeek }: { initialWeek?: string } = {}) {
   }
 
   const [confirmClear, setConfirmClear] = useState(false);
+  /** Planungsdialog aus der Wochenübersicht heraus. */
+  const [planModal, setPlanModal] = useState(false);
+  /** Rückmeldung nach dem Planen (kurz oben eingeblendet). */
+  const [hinweis, setHinweis] = useState<string | null>(null);
 
   const clearWeek = async () => {
     setBusy(true);
@@ -225,6 +229,10 @@ export function WeekPage({ initialWeek }: { initialWeek?: string } = {}) {
         <div className="flex flex-wrap gap-2">
           <button className="btn btn-ghost" onClick={() => window.location.assign('#/shopping')}>
             <ClipboardList className="h-4 w-4" /> Einkaufsliste
+          </button>
+          {/* Direkt aus der Woche planen — Wünsche und Ersetzen/Hinzufügen im Dialog. */}
+          <button className="btn btn-primary" onClick={() => setPlanModal(true)}>
+            <Sparkles className="h-4 w-4" /> Woche planen
           </button>
           {plan && plan.entries.length > 0 && (
             <button
@@ -465,6 +473,35 @@ export function WeekPage({ initialWeek }: { initialWeek?: string } = {}) {
             Rezepte lassen sich mit der Maus in der Tageskarte sortieren und in andere Tage ziehen — auf dem Handy mit den Pfeilen.
           </p>
         </div>
+      )}
+
+      {/* Wochenplanung aus der Übersicht: Wünsche + Ersetzen/Hinzufügen */}
+      {planModal && (
+        <PlanWeekModal
+          householdId={activeHousehold.id}
+          prefs={{
+            // Werktage sind der Standard; im Dialog lässt sich das ändern.
+            planDays: [0, 1, 2, 3, 4],
+            planSlots: settings.defaultSlots,
+            planServings: settings.defaultServings ?? 2,
+            diets: settings.diets ?? [],
+            cuisines: settings.cuisines ?? [],
+            allergies: settings.allergies ?? [],
+            dislikes: settings.dislikes ?? [],
+            appliances: settings.appliances ?? [],
+            maxMinutes: settings.maxMinutes ?? null,
+            kcalTarget: settings.kcalTarget ?? null,
+            note: '',
+            autoPlan: false,
+          }}
+          fixedWeekStart={weekStart}
+          onClose={() => setPlanModal(false)}
+          onDone={(info) => {
+            setPlanModal(false);
+            setHinweis(`${info.created} neu geplant, ${info.reused} aus der Sammlung.`);
+            void load();
+          }}
+        />
       )}
 
       {replanDay !== null && (

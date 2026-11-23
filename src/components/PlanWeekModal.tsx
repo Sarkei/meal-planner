@@ -46,6 +46,8 @@ export function PlanWeekModal({
   const [slots, setSlots] = useState<string[]>(prefs.planSlots.length ? prefs.planSlots : ['abend']);
   const [servings, setServings] = useState(prefs.planServings || 2);
   const [mode, setMode] = useState<'replace' | 'fill'>(initialMode ?? 'replace');
+  /** Besondere Wünsche für diese Woche („mehr Fisch", „schnell unter der Woche"). */
+  const [wuensche, setWuensche] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +78,8 @@ export function PlanWeekModal({
           servings,
           mode,
           mergeMembers: true,
+          // Freitext-Wünsche gehen als Vorliebe an die KI; leer = keine Vorgabe.
+          likes: wuensche.trim() ? [wuensche.trim()] : undefined,
         },
       });
       onDone({ weekStart, created: data.created, reused: data.reused });
@@ -179,6 +183,19 @@ export function PlanWeekModal({
               className="input"
               value={servings}
               onChange={(e) => setServings(Number(e.target.value) || 1)}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="plan-wuensche">
+              Besondere Wünsche für diese Woche
+            </label>
+            <textarea
+              id="plan-wuensche"
+              className="input min-h-[72px] w-full resize-y"
+              placeholder="z. B. mehr Fisch, schnell unter der Woche, kein Schweinefleisch"
+              value={wuensche}
+              onChange={(e) => setWuensche(e.target.value)}
+              maxLength={400}
             />
           </div>
           <div>
