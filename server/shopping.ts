@@ -3,6 +3,7 @@ import { pool } from './db';
 import { fail, requireHousehold, type AuthRequest } from './guards';
 import type { Ingredient } from './recipeSchema';
 import { completeAiJson } from './ai';
+import { schaetzePreis } from './prices';
 import { broadcast } from './events';
 
 export const CATEGORIES = [
@@ -54,6 +55,10 @@ const KEYWORDS: Array<{ category: CategoryId; words: string[] }> = [
       'kartoffel', 'süßkartoffel', 'paprika', 'zucchini', 'aubergine', 'karotte', 'möhre', 'lauch', 'sellerie', 'spinat',
       'brokkoli', 'blumenkohl', 'kohl', 'rosenkohl', 'kürbis', 'pilz', 'champignon', 'ingwer', 'kraut', 'petersilie',
       'basilikum', 'koriander', 'minze', 'dill', 'gemüse', 'obst', 'frühlingszwiebel', 'bohne', 'erbse', 'mais',
+      // Kuerbissorten und Gemuese, die kein Grundwort enthalten
+      'hokkaido', 'butternut', 'spaghettikürbis', 'chicorée', 'chicoree', 'fenchel', 'radieschen', 'rettich',
+      'kopfsalat', 'eisbergsalat', 'romana', 'feldsalat', 'endivie', 'pak choi', 'pak-choi', 'mangold', 'wirsing',
+      'rotkohl', 'weißkohl', 'chinakohl', 'spitzkohl', 'kohlrabi', 'pastinake', 'steckrübe', 'rote bete',
     ],
   },
   {
@@ -67,12 +72,19 @@ const KEYWORDS: Array<{ category: CategoryId; words: string[] }> = [
       'backpulver', 'natron', 'hefe', 'gewürz', 'suppenwürze', 'brühpulver', 'salz', 'pfeffer',
       'curry', 'chili', 'senf', 'essig', 'zucker', 'honig', 'salbei', 'brühe', 'bouillon',
       'sojasauce', 'fischsauce', 'worcestersauce',
+      // Oel, Essig und Saucen: Grundausstattung wie Gewuerze — hat man zu Hause.
+      // Steht hier und NICHT im Vorrat, sonst liegt "Oel" bei Nudeln und Reis
+      // und "Olivenoel" als eigene Position daneben.
+      'olivenöl', 'rapsöl', 'kokosöl', 'öl', 'essig', 'sauce', 'soße', 'ketchup',
+      'mayonnaise', 'mayo', 'dressing', 'pesto',
     ],
   },
   {
     category: 'milchprodukte',
-    words: ['milch', 'quark', 'joghurt', 'jogurt', 'skyr', 'käse', 'feta', 'parmesan', 'mozzarella', 'butter', 'sahne',
-      'schmand', 'crème', 'creme fraiche', 'frischkäse', 'ei', 'eier', 'hüttenkäse', 'mascarpone'],
+    // Kaesesorten einzeln: "Gouda" enthaelt kein "kaese" und landete vorher in Sonstiges.
+    words: ['milch', 'quark', 'joghurt', 'jogurt', 'skyr', 'käse', 'gouda', 'emmentaler', 'bergkäse', 'butterkäse',
+      'tilsiter', 'edamer', 'feta', 'parmesan', 'mozzarella', 'butter', 'sahne', 'schmand', 'crème', 'creme fraiche',
+      'frischkäse', 'ei', 'eier', 'hüttenkäse', 'mascarpone', 'sahnejoghurt', 'kondensmilch'],
   },
   {
     category: 'fleisch-fisch',
@@ -129,10 +141,36 @@ const CATEGORY_ORDER: CategoryId[] = [
 
 const WORD_BOUNDARY = /[a-zäöüß]/;
 
+/**
+ * Woerter, die immer Obst/Gemuese sind — auch wenn sie ein Wort aus einer anderen
+ * Kategorie enthalten ("Butternut" -> "butter").
+ */
+const GEMUESE_VORRANG = [
+  'butternut', 'hokkaido', 'spaghettikürbis', 'kürbis', 'pastinake', 'steckrübe', 'rote bete',
+  'kohlrabi', 'fenchel', 'radieschen', 'rettich', 'mangold', 'wirsing', 'rotkohl', 'weißkohl',
+  'chinakohl', 'spitzkohl', 'pak choi', 'pak-choi', 'chicorée', 'chicoree', 'feldsalat',
+  'eisbergsalat', 'kopfsalat', 'romana', 'endivie', 'rucola', 'zucchini', 'aubergine',
+];
+
 export function guessCategory(name: string): CategoryId {
   const n = name.toLowerCase();
+
+  /*
+   * Eindeutige Gemuese- und Obstwoerter zuerst pruefen.
+   *
+   * Sonst gewinnt eine Teilzeichenkette aus einer anderen Kategorie: "Butternut"
+   * enthaelt "butter" und landete in Milchprodukten, "Hokkaido" ganz in Sonstiges.
+   */
+  for (const wort of GEMUESE_VORRANG) {
+    if (n.includes(wort)) return 'obst-gemuese';
+  }
+
   for (const category of CATEGORY_ORDER) {
-    const entry = KEYWORDS.find((k) => k.category === category)!;
+    // Frueher stand hier `.find(...)` — damit galt pro Kategorie nur der ERSTE
+    // Block. Der zweite Gewuerze-Block (Sauce, Ketchup, Mayo, Essig) wurde nie
+    // ausgewertet, deshalb landeten Saucen in "Sonstiges".
+    const bloecke = KEYWORDS.filter((k) => k.category === category);
+    for (const entry of bloecke) {
     for (const word of entry.words) {
       if (word.length <= 3) {
         // Kurze Wörter wie „ei" nur als eigenständiges Wort, sonst trifft „Risottoreis" oder „Salbei".
@@ -148,6 +186,7 @@ export function guessCategory(name: string): CategoryId {
       } else if (n.includes(word)) {
         return entry.category;
       }
+    }
     }
   }
   return 'sonstiges';
@@ -349,26 +388,57 @@ async function loadList(householdId: string, weekStart: string) {
       ORDER BY category ASC, lower(name) ASC`,
     [householdId, weekStart],
   );
-  const items = rows.rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    amount: r.amount != null ? Number(r.amount) : null,
-    unit: r.unit,
-    category: r.category,
-    checked: r.checked,
-    source: r.source,
-    createdBy: r.created_by,
-  }));
+  const items = rows.rows.map((r) => {
+    const amount = r.amount != null ? Number(r.amount) : null;
+    const preis = schaetzePreis(r.name, amount, r.unit);
+    return {
+      id: r.id,
+      name: r.name,
+      amount,
+      unit: r.unit,
+      category: r.category,
+      checked: r.checked,
+      source: r.source,
+      createdBy: r.created_by,
+      /** Geschaetzter Preis in Euro; null bei Gewuerzen und Grundausstattung. */
+      price: preis.euro,
+      /** Warum kein Preis (z. B. 'Gewürz'), sonst null. */
+      priceNote: preis.grund,
+      /** Bezugspreis zur Einordnung, z. B. „≈ 8,73 €/kg“. */
+      priceBasis: preis.basis,
+    };
+  });
+
+  /*
+   * Wochensumme: nur offene Artikel zaehlen, denn was schon im Korb liegt, ist
+   * gekauft. Gewuerze und Grundausstattung haben keinen Preis und werden
+   * mitgezaehlt in der Anzahl, aber nicht in der Summe.
+   */
+  const mitPreis = items.filter((i) => i.price != null);
+  const offen = items.filter((i) => !i.checked);
+  const offenMitPreis = offen.filter((i) => i.price != null);
+
+  const summe = (liste: typeof items) =>
+    Math.round(liste.reduce((a, i) => a + (i.price ?? 0), 0) * 100) / 100;
+
   return {
     weekStart,
     categories: CATEGORIES.map((c) => ({
       id: c.id,
       label: c.label,
       items: items.filter((i) => i.category === c.id),
+      /** Summe der Kategorie (nur Artikel mit Preis). */
+      sum: summe(items.filter((i) => i.category === c.id)),
     })).filter((c) => c.items.length > 0),
     items,
-    openCount: items.filter((i) => !i.checked).length,
+    openCount: offen.length,
     totalCount: items.length,
+    /** Geschaetzte Gesamtkosten der Woche (alle Artikel mit Preis). */
+    estimatedTotal: summe(mitPreis),
+    /** Was noch zu kaufen ist — der realistische Wert fuer „diese Woche kostet“. */
+    estimatedOpen: summe(offenMitPreis),
+    pricedCount: mitPreis.length,
+    unpricedCount: items.length - mitPreis.length,
   };
 }
 

@@ -1,0 +1,357 @@
+/**
+ * Preis-Schätzung für die Einkaufsliste.
+ *
+ * Ziel ist eine **grobe Hausnummer**, keine Kassengenauigkeit: „Diese Woche kostet
+ * etwa 62 €". Grundlage sind übliche Discounter-/Supermarktpreise in Deutschland
+ * (Stand Ende 2026), pro Kilogramm, Liter oder Stück. Daraus wird über die Menge
+ * der Wochenpreis gerechnet.
+ *
+ * Gewürze, Saucen und Grundausstattung bekommen **bewusst keinen Preis**: Salz,
+ * Pfeffer, Oregano oder Sojasauce hat man zu Hause und kauft sie nicht wöchentlich.
+ * Sie würden die Summe jede Woche künstlich aufblähen. Sie landen in der Kategorie
+ * „Gewürze & Saucen" und werden mit `null` bepreist.
+ */
+
+/** Preis je Kilogramm (g), je Liter (ml) oder je Stück. */
+type Preis = { proKg?: number; proL?: number; proStueck?: number; label: string };
+
+/**
+ * Tabelle: Stichwort → Preis. Reihenfolge zählt — das erste passende Stichwort
+ * gewinnt, deshalb stehen spezielle Fälle (Olivenöl) vor allgemeinen (Öl).
+ */
+const PREISE: Array<{ wort: string; preis: Preis }> = [
+  // ── Öle, Essig, Saucen: Grundausstattung, hat man daheim → kein Preis ──────
+  { wort: 'olivenöl', preis: { label: 'Grundausstattung' } },
+  { wort: 'rapsöl', preis: { label: 'Grundausstattung' } },
+  { wort: 'kokosöl', preis: { label: 'Grundausstattung' } },
+  { wort: 'öl', preis: { label: 'Grundausstattung' } },
+  { wort: 'essig', preis: { label: 'Grundausstattung' } },
+  { wort: 'sojasauce', preis: { label: 'Grundausstattung' } },
+  { wort: 'fischsauce', preis: { label: 'Grundausstattung' } },
+  { wort: 'worcester', preis: { label: 'Grundausstattung' } },
+  { wort: 'senf', preis: { label: 'Grundausstattung' } },
+  { wort: 'ketchup', preis: { label: 'Grundausstattung' } },
+  { wort: 'mayonnaise', preis: { label: 'Grundausstattung' } },
+  { wort: 'mayo', preis: { label: 'Grundausstattung' } },
+  { wort: 'pesto', preis: { proKg: 18, label: 'Glas' } },
+
+  // ── Gewürze, Backtriebmittel, Süßungsmittel: kein Preis ───────────────────
+  { wort: 'salz', preis: { label: 'Gewürz' } },
+  { wort: 'pfeffer', preis: { label: 'Gewürz' } },
+  { wort: 'paprikapulver', preis: { label: 'Gewürz' } },
+  { wort: 'chili', preis: { label: 'Gewürz' } },
+  { wort: 'chilipulver', preis: { label: 'Gewürz' } },
+  { wort: 'chiliflocken', preis: { label: 'Gewürz' } },
+  { wort: 'curry', preis: { label: 'Gewürz' } },
+  { wort: 'currypulver', preis: { label: 'Gewürz' } },
+  { wort: 'oregano', preis: { label: 'Gewürz' } },
+  { wort: 'thymian', preis: { label: 'Gewürz' } },
+  { wort: 'rosmarin', preis: { label: 'Gewürz' } },
+  { wort: 'basilikum', preis: { proStueck: 1.19, label: 'Topf' } },
+  { wort: 'zimt', preis: { label: 'Gewürz' } },
+  { wort: 'muskat', preis: { label: 'Gewürz' } },
+  { wort: 'kurkuma', preis: { label: 'Gewürz' } },
+  { wort: 'kümmel', preis: { label: 'Gewürz' } },
+  { wort: 'kreuzkümmel', preis: { label: 'Gewürz' } },
+  { wort: 'lorbeer', preis: { label: 'Gewürz' } },
+  { wort: 'gewürz', preis: { label: 'Gewürz' } },
+  { wort: 'vanille', preis: { label: 'Gewürz' } },
+  { wort: 'backpulver', preis: { label: 'Backzutat' } },
+  { wort: 'natron', preis: { label: 'Backzutat' } },
+  { wort: 'hefe', preis: { proKg: 8, label: 'Würfel' } },
+  { wort: 'brühe', preis: { label: 'Grundausstattung' } },
+  { wort: 'bouillon', preis: { label: 'Grundausstattung' } },
+  { wort: 'suppenwürze', preis: { label: 'Grundausstattung' } },
+  { wort: 'zucker', preis: { proKg: 1.19, label: 'kg' } },
+  { wort: 'honig', preis: { proKg: 8.99, label: 'Glas' } },
+  { wort: 'vanillezucker', preis: { label: 'Backzutat' } },
+
+  // ── Obst & Gemüse ────────────────────────────────────────────────────────
+  { wort: 'kartoffel', preis: { proKg: 1.29, label: 'kg' } },
+  { wort: 'süßkartoffel', preis: { proKg: 2.49, label: 'kg' } },
+  { wort: 'zwiebel', preis: { proKg: 1.49, label: 'kg' } },
+  { wort: 'frühlingszwiebel', preis: { proKg: 3.99, label: 'Bund' } },
+  { wort: 'knoblauch', preis: { proKg: 7.99, label: 'kg' } },
+  { wort: 'tomate', preis: { proKg: 2.79, label: 'kg' } },
+  { wort: 'passierte tomate', preis: { proKg: 1.98, label: 'Packung' } },
+  { wort: 'dosentomate', preis: { proKg: 1.78, label: 'Dose' } },
+  { wort: 'gurke', preis: { proStueck: 1.09, label: 'Stück' } },
+  { wort: 'paprika', preis: { proKg: 4.49, label: 'kg' } },
+  { wort: 'zucchini', preis: { proKg: 2.49, label: 'kg' } },
+  { wort: 'aubergine', preis: { proKg: 2.99, label: 'kg' } },
+  { wort: 'karotte', preis: { proKg: 1.19, label: 'kg' } },
+  { wort: 'möhre', preis: { proKg: 1.19, label: 'kg' } },
+  { wort: 'lauch', preis: { proKg: 2.19, label: 'Stange' } },
+  { wort: 'sellerie', preis: { proKg: 2.99, label: 'kg' } },
+  { wort: 'spinat', preis: { proKg: 8.9, label: 'Beutel' } },
+  { wort: 'brokkoli', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'blumenkohl', preis: { proKg: 2.99, label: 'Stück' } },
+  { wort: 'rosenkohl', preis: { proKg: 3.99, label: 'kg' } },
+  { wort: 'kohl', preis: { proKg: 1.79, label: 'kg' } },
+  { wort: 'kürbis', preis: { proKg: 2.29, label: 'kg' } },
+  { wort: 'champignon', preis: { proKg: 5.99, label: 'kg' } },
+  { wort: 'pilz', preis: { proKg: 5.99, label: 'kg' } },
+  { wort: 'ingwer', preis: { proKg: 8.99, label: 'kg' } },
+  { wort: 'salat', preis: { proStueck: 1.49, label: 'Kopf' } },
+  { wort: 'rucola', preis: { proKg: 12.9, label: 'Beutel' } },
+  { wort: 'petersilie', preis: { proStueck: 1.09, label: 'Bund' } },
+  { wort: 'koriander', preis: { proStueck: 1.19, label: 'Bund' } },
+  { wort: 'minze', preis: { proStueck: 1.19, label: 'Bund' } },
+  { wort: 'dill', preis: { proStueck: 1.09, label: 'Bund' } },
+  { wort: 'apfel', preis: { proKg: 2.49, label: 'kg' } },
+  { wort: 'banane', preis: { proKg: 1.59, label: 'kg' } },
+  { wort: 'beere', preis: { proKg: 12.9, label: 'Schale' } },
+  { wort: 'erdbeere', preis: { proKg: 9.9, label: 'Schale' } },
+  { wort: 'himbeere', preis: { proKg: 15.9, label: 'Schale' } },
+  { wort: 'heidelbeere', preis: { proKg: 13.9, label: 'Schale' } },
+  { wort: 'birne', preis: { proKg: 2.79, label: 'kg' } },
+  { wort: 'zitrone', preis: { proStueck: 0.45, label: 'Stück' } },
+  { wort: 'limette', preis: { proStueck: 0.45, label: 'Stück' } },
+  { wort: 'orange', preis: { proKg: 2.29, label: 'kg' } },
+  { wort: 'pfirsich', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'traube', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'melone', preis: { proKg: 2.49, label: 'kg' } },
+  { wort: 'mango', preis: { proKg: 4.49, label: 'kg' } },
+  { wort: 'avocado', preis: { proStueck: 1.29, label: 'Stück' } },
+  { wort: 'bohne', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'erbse', preis: { proKg: 4.99, label: 'kg' } },
+  { wort: 'mais', preis: { proKg: 3.98, label: 'Dose' } },
+  { wort: 'olive', preis: { proKg: 8.99, label: 'Glas' } },
+  { wort: 'kapern', preis: { proKg: 15.9, label: 'Glas' } },
+
+  // ── Milchprodukte & Eier ─────────────────────────────────────────────────
+  { wort: 'milch', preis: { proL: 1.29, label: 'l' } },
+  { wort: 'kokosmilch', preis: { proKg: 3.33, label: 'Dose' } },
+  { wort: 'butter', preis: { proKg: 9.16, label: 'kg' } },
+  { wort: 'sahne', preis: { proL: 7.45, label: 'Becher' } },
+  { wort: 'schmand', preis: { proKg: 6.5, label: 'Becher' } },
+  { wort: 'crème fraîche', preis: { proKg: 7.5, label: 'Becher' } },
+  { wort: 'creme fraiche', preis: { proKg: 7.5, label: 'Becher' } },
+  { wort: 'joghurt', preis: { proKg: 2.29, label: 'kg' } },
+  { wort: 'jogurt', preis: { proKg: 2.29, label: 'kg' } },
+  { wort: 'skyr', preis: { proKg: 3.79, label: 'kg' } },
+  { wort: 'quark', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'hüttenkäse', preis: { proKg: 6.5, label: 'Becher' } },
+  { wort: 'frischkäse', preis: { proKg: 8.9, label: 'Becher' } },
+  { wort: 'mascarpone', preis: { proKg: 11.9, label: 'Becher' } },
+  { wort: 'feta', preis: { proKg: 11.45, label: 'kg' } },
+  { wort: 'parmesan', preis: { proKg: 24.9, label: 'kg' } },
+  { wort: 'mozzarella', preis: { proKg: 7.9, label: 'kg' } },
+  { wort: 'gouda', preis: { proKg: 8.73, label: 'kg' } },
+  { wort: 'emmentaler', preis: { proKg: 11.9, label: 'kg' } },
+  { wort: 'bergkäse', preis: { proKg: 16.9, label: 'kg' } },
+  { wort: 'frischkäse', preis: { proKg: 8.9, label: 'Becher' } },
+  { wort: 'käse', preis: { proKg: 9.9, label: 'kg' } },
+  { wort: 'ei', preis: { proStueck: 0.33, label: 'Stück' } },
+  { wort: 'eier', preis: { proStueck: 0.33, label: 'Stück' } },
+
+  // ── Fleisch & Fisch ──────────────────────────────────────────────────────
+  { wort: 'hackfleisch', preis: { proKg: 11.98, label: 'kg' } },
+  { wort: 'hack', preis: { proKg: 11.98, label: 'kg' } },
+  { wort: 'hähnchen', preis: { proKg: 12.48, label: 'kg' } },
+  { wort: 'hühnchen', preis: { proKg: 12.48, label: 'kg' } },
+  { wort: 'huhn', preis: { proKg: 12.48, label: 'kg' } },
+  { wort: 'pute', preis: { proKg: 11.9, label: 'kg' } },
+  { wort: 'rind', preis: { proKg: 19.9, label: 'kg' } },
+  { wort: 'schwein', preis: { proKg: 9.9, label: 'kg' } },
+  { wort: 'fleisch', preis: { proKg: 12.9, label: 'kg' } },
+  { wort: 'steak', preis: { proKg: 29.9, label: 'kg' } },
+  { wort: 'filet', preis: { proKg: 22.9, label: 'kg' } },
+  { wort: 'schnitzel', preis: { proKg: 13.9, label: 'kg' } },
+  { wort: 'wurst', preis: { proKg: 9.9, label: 'kg' } },
+  { wort: 'schinken', preis: { proKg: 12.9, label: 'kg' } },
+  { wort: 'salami', preis: { proKg: 13.9, label: 'kg' } },
+  { wort: 'speck', preis: { proKg: 12.9, label: 'kg' } },
+  { wort: 'lachs', preis: { proKg: 24.9, label: 'kg' } },
+  { wort: 'thunfisch', preis: { proKg: 11.9, label: 'Dose' } },
+  { wort: 'garnele', preis: { proKg: 19.9, label: 'kg' } },
+  { wort: 'garnelen', preis: { proKg: 19.9, label: 'kg' } },
+  { wort: 'forelle', preis: { proKg: 17.9, label: 'kg' } },
+  { wort: 'kabeljau', preis: { proKg: 21.9, label: 'kg' } },
+  { wort: 'fisch', preis: { proKg: 19.9, label: 'kg' } },
+  { wort: 'tofu', preis: { proKg: 8.9, label: 'kg' } },
+  { wort: 'tempeh', preis: { proKg: 12.9, label: 'kg' } },
+
+  // ── Brot & Backwaren ─────────────────────────────────────────────────────
+  { wort: 'brot', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'brötchen', preis: { proStueck: 0.45, label: 'Stück' } },
+  { wort: 'baguette', preis: { proStueck: 1.19, label: 'Stück' } },
+  { wort: 'toast', preis: { proKg: 2.98, label: 'Packung' } },
+  { wort: 'ciabatta', preis: { proStueck: 1.49, label: 'Stück' } },
+  { wort: 'croissant', preis: { proStueck: 0.79, label: 'Stück' } },
+  { wort: 'brezel', preis: { proStueck: 0.85, label: 'Stück' } },
+  { wort: 'wrap', preis: { proKg: 6.9, label: 'Packung' } },
+  { wort: 'tortilla', preis: { proKg: 6.9, label: 'Packung' } },
+  { wort: 'kuchen', preis: { proKg: 8.9, label: 'kg' } },
+
+  // ── Nudeln, Reis & Vorrat ────────────────────────────────────────────────
+  { wort: 'nudel', preis: { proKg: 2.38, label: 'kg' } },
+  { wort: 'pasta', preis: { proKg: 2.38, label: 'kg' } },
+  { wort: 'spaghetti', preis: { proKg: 2.38, label: 'kg' } },
+  { wort: 'penne', preis: { proKg: 2.38, label: 'kg' } },
+  { wort: 'reis', preis: { proKg: 1.99, label: 'kg' } },
+  { wort: 'couscous', preis: { proKg: 4.49, label: 'kg' } },
+  { wort: 'bulgur', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'quinoa', preis: { proKg: 8.9, label: 'kg' } },
+  { wort: 'polenta', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'mehl', preis: { proKg: 0.99, label: 'kg' } },
+  { wort: 'haferflocken', preis: { proKg: 1.49, label: 'kg' } },
+  { wort: 'müsli', preis: { proKg: 4.99, label: 'kg' } },
+  { wort: 'linsen', preis: { proKg: 3.49, label: 'kg' } },
+  { wort: 'kichererbsen', preis: { proKg: 2.98, label: 'Dose' } },
+  { wort: 'hummus', preis: { proKg: 7.9, label: 'kg' } },
+  { wort: 'mandel', preis: { proKg: 12.9, label: 'kg' } },
+  { wort: 'walnuss', preis: { proKg: 14.9, label: 'kg' } },
+  { wort: 'erdnuss', preis: { proKg: 8.9, label: 'kg' } },
+  { wort: 'nuss', preis: { proKg: 13.9, label: 'kg' } },
+  { wort: 'nüsse', preis: { proKg: 13.9, label: 'kg' } },
+  { wort: 'sesam', preis: { proKg: 9.9, label: 'kg' } },
+  { wort: 'samen', preis: { proKg: 9.9, label: 'kg' } },
+
+  // ── Tiefkühl ─────────────────────────────────────────────────────────────
+  { wort: 'tiefkühl', preis: { proKg: 4.49, label: 'kg' } },
+  { wort: 'gefroren', preis: { proKg: 4.49, label: 'kg' } },
+  { wort: 'eiscreme', preis: { proL: 4.99, label: 'l' } },
+
+  // ── Getränke ─────────────────────────────────────────────────────────────
+  { wort: 'wasser', preis: { proL: 0.35, label: 'l' } },
+  { wort: 'saft', preis: { proL: 1.49, label: 'l' } },
+  { wort: 'bier', preis: { proL: 2.49, label: 'l' } },
+  { wort: 'wein', preis: { proL: 6.9, label: 'l' } },
+  { wort: 'limonade', preis: { proL: 1.19, label: 'l' } },
+  { wort: 'cola', preis: { proL: 1.29, label: 'l' } },
+  { wort: 'schorle', preis: { proL: 1.19, label: 'l' } },
+  { wort: 'tee', preis: { label: 'Grundausstattung' } },
+
+  // ── Haushalt & Drogerie ──────────────────────────────────────────────────
+  { wort: 'spülmittel', preis: { proStueck: 1.95, label: 'Flasche' } },
+  { wort: 'toilettenpapier', preis: { proStueck: 3.49, label: 'Packung' } },
+  { wort: 'klopapier', preis: { proStueck: 3.49, label: 'Packung' } },
+  { wort: 'küchenrolle', preis: { proStueck: 2.49, label: 'Packung' } },
+  { wort: 'alufolie', preis: { proStueck: 1.99, label: 'Rolle' } },
+  { wort: 'frischhaltefolie', preis: { proStueck: 1.79, label: 'Rolle' } },
+  { wort: 'backpapier', preis: { proStueck: 1.79, label: 'Rolle' } },
+  { wort: 'müllbeutel', preis: { proStueck: 2.49, label: 'Packung' } },
+  { wort: 'seife', preis: { proStueck: 1.29, label: 'Stück' } },
+  { wort: 'waschmittel', preis: { proStueck: 7.99, label: 'Packung' } },
+  { wort: 'schwamm', preis: { proStueck: 1.49, label: 'Packung' } },
+];
+
+/** Umrechnung von Haushaltsmaßen in Gramm/Milliliter. */
+const HAUSHALTSMASS: Record<string, { menge: number; art: 'g' | 'ml' | 'stueck' }> = {
+  el: { menge: 15, art: 'ml' },
+  tl: { menge: 5, art: 'ml' },
+  prise: { menge: 1, art: 'g' },
+  handvoll: { menge: 30, art: 'g' },
+  zehe: { menge: 5, art: 'g' },
+  zehen: { menge: 5, art: 'g' },
+  bund: { menge: 80, art: 'g' },
+  scheibe: { menge: 25, art: 'g' },
+  scheiben: { menge: 25, art: 'g' },
+  stange: { menge: 200, art: 'g' },
+  dose: { menge: 400, art: 'g' },
+  dosen: { menge: 400, art: 'g' },
+  becher: { menge: 200, art: 'ml' },
+  packung: { menge: 250, art: 'g' },
+  stueck: { menge: 1, art: 'stueck' },
+  'stück': { menge: 1, art: 'stueck' },
+};
+
+export type PreisSchaetzung = {
+  /** Geschätzter Preis in Euro, oder null bei Gewürzen/Grundausstattung. */
+  euro: number | null;
+  /** Warum kein Preis: 'Gewürz', 'Grundausstattung' … sonst null. */
+  grund: string | null;
+  /** Kurzer Beleg für die Anzeige, z. B. „≈ 8,73 €/kg“. */
+  basis: string | null;
+};
+
+/**
+ * Preis für eine Zutat schätzen.
+ *
+ * Unbekannte Lebensmittel werden mit einem mittleren Kilopreis angesetzt, damit die
+ * Summe nicht untertrieben wird; Gewürze bleiben bei null.
+ */
+export function schaetzePreis(name: string, amount: number | null, unit: string): PreisSchaetzung {
+  const n = name.toLowerCase().trim();
+  const treffer = PREISE.find((p) => n.includes(p.wort));
+
+  // Gewürze und Grundausstattung: bewusst kein Preis.
+  if (treffer && treffer.preis.proKg == null && treffer.preis.proL == null && treffer.preis.proStueck == null) {
+    return { euro: null, grund: treffer.preis.label, basis: null };
+  }
+
+  const preis = treffer?.preis;
+  const menge = amount == null ? null : Number(amount);
+  const u = unit.toLowerCase().trim();
+
+  // Ohne Menge nur den Bezugspreis nennen, keinen Eurobetrag erfinden.
+  if (menge == null || !Number.isFinite(menge) || menge <= 0) {
+    if (preis?.proKg != null) return { euro: null, grund: null, basis: `≈ ${preis.proKg.toFixed(2)} €/kg` };
+    if (preis?.proL != null) return { euro: null, grund: null, basis: `≈ ${preis.proL.toFixed(2)} €/l` };
+    if (preis?.proStueck != null) return { euro: null, grund: null, basis: `≈ ${preis.proStueck.toFixed(2)} €/Stück` };
+    return { euro: null, grund: null, basis: null };
+  }
+
+  // Stückpreis
+  if (u === 'stück' || u === 'stueck' || u === 'stk') {
+    const proStueck = preis?.proStueck ?? (preis?.proKg != null ? (preis.proKg * 150) / 1000 : 1.5);
+    return { euro: rund(menge * proStueck), grund: null, basis: null };
+  }
+
+  // Gramm / Kilogramm
+  if (u === 'g' || u === 'gramm') {
+    const proKg = preis?.proKg ?? 9.9;
+    return { euro: rund((menge / 1000) * proKg), grund: null, basis: `≈ ${proKg.toFixed(2)} €/kg` };
+  }
+  if (u === 'kg') {
+    const proKg = preis?.proKg ?? 9.9;
+    return { euro: rund(menge * proKg), grund: null, basis: `≈ ${proKg.toFixed(2)} €/kg` };
+  }
+
+  // Milliliter / Liter
+  if (u === 'ml') {
+    const proL = preis?.proL ?? 3.5;
+    return { euro: rund((menge / 1000) * proL), grund: null, basis: `≈ ${proL.toFixed(2)} €/l` };
+  }
+  if (u === 'l' || u === 'liter') {
+    const proL = preis?.proL ?? 3.5;
+    return { euro: rund(menge * proL), grund: null, basis: `≈ ${proL.toFixed(2)} €/l` };
+  }
+
+  // Haushaltsmaße
+  const mass = HAUSHALTSMASS[u];
+  if (mass) {
+    if (mass.art === 'stueck') {
+      const proStueck = preis?.proStueck ?? 1.5;
+      return { euro: rund(menge * mass.menge * proStueck), grund: null, basis: null };
+    }
+    if (mass.art === 'ml') {
+      const proL = preis?.proL ?? (preis?.proKg != null ? preis.proKg * 0.9 : 4);
+      return { euro: rund(((menge * mass.menge) / 1000) * proL), grund: null, basis: null };
+    }
+    const proKg = preis?.proKg ?? 9.9;
+    return { euro: rund(((menge * mass.menge) / 1000) * proKg), grund: null, basis: null };
+  }
+
+  // Einheit unbekannt („Prise", „nach Bedarf"): nur Bezugspreis.
+  if (preis?.proKg != null) return { euro: null, grund: null, basis: `≈ ${preis.proKg.toFixed(2)} €/kg` };
+  if (preis?.proStueck != null) return { euro: null, grund: null, basis: `≈ ${preis.proStueck.toFixed(2)} €/Stück` };
+  return { euro: null, grund: null, basis: null };
+}
+
+function rund(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+/** Ob eine Zutat in die Kategorie „Gewürze & Saucen" gehört (kein Preis). */
+export function istGewuerzOderSauce(name: string): boolean {
+  const n = name.toLowerCase();
+  return PREISE.some(
+    (p) =>
+      n.includes(p.wort) &&
+      p.preis.proKg == null &&
+      p.preis.proL == null &&
+      p.preis.proStueck == null,
+  );
+}

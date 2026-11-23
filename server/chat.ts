@@ -10,6 +10,7 @@ import { broadcast } from './events';
 import { resolveHousehold } from './recipes';
 import { normalizeRecipe, recipeInputSchema } from './recipeSchema';
 import { guessCategory } from './shopping';
+import { schaetzePreis } from './prices';
 import { planWeekForUser, resolveProvider, WeekPlanError, type WeekPlanBody } from './ai';
 
 /**
@@ -231,7 +232,14 @@ const TOOLS: Array<Record<string, unknown>> = [
     type: 'function',
     function: {
       name: 'einkaufsliste_lesen',
-      description: 'Zeigt die Einkaufsliste des Haushalts (aus Wochenplan plus manuell).',
+      description:
+        'Zeigt die Einkaufsliste des Haushalts (aus Wochenplan plus manuell) MIT ' +
+        'geschätzten Preisen pro Artikel und der Wochensumme. Nutze dieses Werkzeug, ' +
+        'wenn der Nutzer nach den Kosten fragt oder sagt, die Woche sei zu teuer — ' +
+        'dann sieh dir "teuerste_positionen" an und plane mit günstigeren Rezepten neu ' +
+        '(z. B. weniger Fleisch, saisonales Gemüse, Hülsenfrüchte statt Fleisch). ' +
+        'Gewürze und Grundausstattung wie Öl, Salz, Essig haben keinen Preis, ' +
+        'weil man sie zu Hause hat.',
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -555,12 +563,28 @@ async function toolFavorite(ctx: Ctx, a: Record<string, unknown>) {
 
 async function toolShoppingRead(ctx: Ctx) {
   if (!ctx.householdId) return { fehler: 'Du bist in keinem Haushalt.' };
-  const rows = await pool.query(
-    `SELECT name, amount, unit, checked FROM shopping_items
+  const rows = await pool.query<{ name: string; amount: string | null; unit: string; checked: boolean; category: string }>(
+    `SELECT name, amount, unit, checked, category FROM shopping_items
       WHERE household_id = $1 AND week_start = $2 ORDER BY name`,
     [ctx.householdId, mondayOf()],
   );
-  return { anzahl: rows.rowCount, artikel: rows.rows };
+  // Preise mitgeben, damit der Assistent bei "zu teuer" selbst rechnen kann,
+  // welche Zutaten den Ausschlag geben und welche Rezepte guenstiger waeren.
+  const artikel = rows.rows.map((r) => {
+    const menge = r.amount != null ? Number(r.amount) : null;
+    const p = schaetzePreis(r.name, menge, r.unit);
+    return { name: r.name, menge, einheit: r.unit, kategorie: r.category, geprueft: r.checked, euro: p.euro };
+  });
+  const offen = artikel.filter((a) => !a.geprueft && a.euro != null);
+  const summe = Math.round(offen.reduce((a, x) => a + (x.euro ?? 0), 0) * 100) / 100;
+  // Die teuersten Positionen zuerst — dort lohnt Sparen am meisten.
+  const teuerste = [...offen].sort((a, b) => (b.euro ?? 0) - (a.euro ?? 0)).slice(0, 8);
+  return {
+    anzahl: rows.rowCount,
+    geschaetzte_summe_euro: summe,
+    teuerste_positionen: teuerste,
+    artikel,
+  };
 }
 
 async function toolShoppingAdd(ctx: Ctx, a: Record<string, unknown>) {

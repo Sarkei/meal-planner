@@ -12,15 +12,27 @@ type ShoppingItem = {
   category: string;
   checked: boolean;
   source: string;
+  price: number | null;
+  priceNote: string | null;
+  priceBasis: string | null;
 };
 
 type ShoppingList = {
   weekStart: string;
-  categories: { id: string; label: string; items: ShoppingItem[] }[];
+  categories: { id: string; label: string; items: ShoppingItem[]; sum: number }[];
   items: ShoppingItem[];
   openCount: number;
   totalCount: number;
+  estimatedTotal: number;
+  estimatedOpen: number;
+  pricedCount: number;
+  unpricedCount: number;
 };
+
+/** 61.4 → „61,40 €" (deutsche Schreibweise). */
+function formatEuro(value: number): string {
+  return `${value.toFixed(2).replace('.', ',')} €`;
+}
 
 /** 1.5 → „1,5" (deutsche Schreibweise, ganze Zahlen ohne Komma). */
 function formatAmount(value: number): string {
@@ -167,9 +179,15 @@ export function ShoppingPage() {
         </div>
         <div className="flex items-center gap-2">
           {list && (
-            <span className="text-xs font-semibold text-ink/50">
-              {list.openCount} offen · {list.totalCount} gesamt
-            </span>
+            <div className="text-right">
+              <p className="font-display text-lg font-bold leading-none">
+                {formatEuro(list.estimatedOpen)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-ink/45">
+                {list.openCount} offen · {list.totalCount} gesamt
+                {list.unpricedCount > 0 ? ` · ${list.unpricedCount} ohne Preis` : ''}
+              </p>
+            </div>
           )}
           {list && list.items.some((i) => i.checked) && (
             <button className="btn btn-ghost btn-sm text-xs" onClick={() => void resetChecked()}>
@@ -216,7 +234,20 @@ export function ShoppingPage() {
         <div className="grid gap-3 md:grid-cols-2">
           {grouped.map((group) => (
             <section key={group.id} className="card p-4">
-              <h2 className="mb-2 font-display text-sm font-bold">{group.label}</h2>
+              {/* Kopf in derselben Spaltenaufteilung wie die Artikel-Zeilen: die
+                  Summe steht in der Mengen-Spalte, also dort wo unten „400 g" steht. */}
+              <div className="mb-2 flex items-center gap-3">
+                <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <h2 className="flex-1 font-display text-sm font-bold">{group.label}</h2>
+                <span className="text-right text-[11px] font-semibold tabular-nums text-ink/45">
+                  {group.sum > 0
+                    ? `Summe: ${formatEuro(group.sum)}`
+                    : group.id === 'gewuerze'
+                      ? 'Summe: —'
+                      : ''}
+                </span>
+                <span className="w-14 shrink-0" aria-hidden="true" />
+              </div>
               <ul className="divide-y divide-ink/5">
                 {group.items.map((item) => (
                   <li key={item.id}>
@@ -237,6 +268,18 @@ export function ShoppingPage() {
                       <span className="text-sm font-semibold text-ink/60">
                         {item.amount != null ? `${formatAmount(item.amount)} ` : ''}
                         {item.unit}
+                      </span>
+                      <span
+                        className="w-14 shrink-0 text-right text-[11px] tabular-nums text-ink/40"
+                        title={
+                          item.priceNote
+                            ? `Kein Preis: ${item.priceNote}`
+                            : item.priceBasis
+                              ? `Schätzung ${item.priceBasis}`
+                              : undefined
+                        }
+                      >
+                        {item.price != null ? formatEuro(item.price) : item.priceNote ? '—' : ''}
                       </span>
                       {item.source === 'manual' && (
                         <button
