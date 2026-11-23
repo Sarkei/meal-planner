@@ -16,6 +16,7 @@ import { aiRouter, resolveProvider } from './ai';
 import { shoppingRouter } from './shopping';
 import { foodRouter } from './food';
 import { eventsRouter } from './events';
+import { pushoverRouter } from './pushover-route';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -48,6 +49,19 @@ app.use('/api/connect', connectRouter);
 // SSE: Token kommt als Query-Parameter, weil EventSource keine Header setzen kann.
 app.use('/api/events', eventsRouter);
 // Alles ab hier nur mit gültigem Token — die Routen selbst prüfen zusätzlich Haushaltsrechte.
+/*
+ * Pushover: Zugang hinterlegen, testen, trennen.
+ * Werte bleiben serverseitig — GET liefert nur „verbunden".
+ */
+app.use(
+  '/api/integrations/pushover',
+  attachUserFromToken,
+  pushoverRouter(pool as never, (req) => (req as { userId?: number }).userId ?? null, {
+    titel: 'Meal Planner',
+    text: 'Wenn du das siehst, funktionieren deine Benachrichtigungen.',
+  }),
+);
+
 app.use('/api/households', requireAuth, householdsRouter);
 app.use('/api/recipes', requireAuth, recipesRouter);
 app.use('/api/plans', requireAuth, plansRouter);

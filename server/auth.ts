@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { pool } from './db';
 import { normalizeHouseholdPreferences } from './householdPrefs';
 import { fail, generateInviteCode, type AuthRequest } from './guards';
+import { readFileSync } from 'node:fs';
 
 const JWT_SECRET = process.env.JWT_SECRET?.trim() || 'dev-secret-change-me';
 const TOKEN_TTL = process.env.JWT_TTL?.trim() || '30d';
@@ -268,30 +269,81 @@ export async function saveSettings(userId: number, patch: unknown): Promise<User
   return next;
 }
 
-async function sendResetMail(email: string, link: string): Promise<boolean> {
-  const host = process.env.SMTP_HOST?.trim();
-  if (!host) return false;
+/**
+ * Passwort-Reset-Mail über Resend.
+ *
+ * Vorher lief das über SMTP mit `SMTP_HOST=127.0.0.1` — dort war nichts, jede
+ * Mail schlug fehl. Jetzt geht es über die Resend-API, denselben Kanal wie das
+ * TSV-Kontaktformular. Der Key kommt aus `RESEND_API_KEY`.
+ *
+ * Die Absenderadresse hat kein Postfach, und Reply-To steht auf `noreply@` —
+ * eine Antwort auf diese Mail landet nirgends.
+ */
+/**
+ * Wert aus /app/.env lesen.
+ *
+ * Der Container bekommt seine Variablen aus der docker-compose.yaml; eine
+ * `.env` wird nicht automatisch geladen. Damit der Resend-Key ankommt, wird er
+ * hier zusätzlich aus der Datei gelesen.
+ */
+function ausEnvDatei(schluessel: string): string {
   try {
-    const nodemailer = await import('nodemailer');
-    const transport = nodemailer.default.createTransport({
-      host,
-      port: Number(process.env.SMTP_PORT ?? 587),
-      secure: process.env.SMTP_SECURE === '1',
-      auth:
-        process.env.SMTP_USER?.trim()
-          ? { user: process.env.SMTP_USER.trim(), pass: process.env.SMTP_PASS ?? '' }
-          : undefined,
+    const txt = readFileSync('/app/.env', 'utf8');
+    for (const zeile of txt.split('\n')) {
+      const m = zeile.match(new RegExp(`^${schluessel}\\s*=\\s*(.+)$`));
+      if (m) return m[1].trim().replace(/^["']|["']$/g, '');
+    }
+  } catch {
+    /* keine Datei — dann gilt die Umgebung */
+  }
+  return '';
+}
+
+async function sendResetMail(email: string, link: string): Promise<boolean> {
+  const key = process.env.RESEND_API_KEY?.trim() || ausEnvDatei('RESEND_API_KEY');
+  if (!key) {
+    console.warn('[auth] RESEND_API_KEY fehlt — Reset-Mail nicht gesendet.');
+    return false;
+  }
+
+  const absender = 'Meal Planner <meal@nas-timgreen.com>';
+  const text = [
+    'Hallo,',
+    `für dein Konto beim Meal Planner wurde ein neues Passwort angefordert. Der Link ist ${RESET_TTL_MINUTES} Minuten gültig:`,
+    link,
+    'Wenn du das nicht angefordert hast, ignoriere diese Mail — dein Passwort bleibt unverändert.',
+    'Diese Nachricht wurde automatisch erstellt — bitte antworte nicht darauf.',
+  ].join('\n\n');
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: absender,
+        to: [email],
+        reply_to: 'noreply@nas-timgreen.com',
+        subject: 'Meal Planner — Passwort zurücksetzen',
+        text,
+        html: `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.65;color:#121a16;max-width:520px">
+<p>Hallo,</p>
+<p>für dein Konto beim <strong>Meal Planner</strong> wurde ein neues Passwort angefordert. Der Link ist <strong>${RESET_TTL_MINUTES} Minuten</strong> gültig.</p>
+<p><a href="${link}" style="display:inline-block;background:#2f7d5a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Neues Passwort setzen</a></p>
+<p style="font-size:13px;color:#55635c;word-break:break-all">${link}</p>
+<p style="font-size:13px;color:#55635c">Wenn du das nicht angefordert hast, ignoriere diese Mail — dein Passwort bleibt unverändert.</p>
+<p style="font-size:11.5px;color:#8a978f">Diese Nachricht wurde automatisch erstellt — bitte antworte nicht darauf.</p>
+</div>`,
+      }),
+      signal: AbortSignal.timeout(15_000),
     });
-    await transport.sendMail({
-      from: process.env.SMTP_FROM?.trim() || 'noreply@mealplanner.local',
-      to: email,
-      subject: 'Meal Planner — Passwort zurücksetzen',
-      text: `Moin,\n\nhier ist dein Link zum Zurücksetzen des Passworts (${RESET_TTL_MINUTES} Minuten gültig):\n${link}\n\nWenn du das nicht warst, ignoriere diese Mail.`,
-      html: `<p>Moin,</p><p>hier ist dein Link zum Zurücksetzen des Passworts (${RESET_TTL_MINUTES} Minuten gültig):</p><p><a href="${link}">${link}</a></p><p>Wenn du das nicht warst, ignoriere diese Mail.</p>`,
-    });
+    if (!res.ok) {
+      const grund = await res.text().catch(() => '');
+      console.warn('[auth] Resend lehnte ab:', res.status, grund.slice(0, 200));
+      return false;
+    }
     return true;
   } catch (e) {
-    console.warn('[auth] Reset-Mail konnte nicht gesendet werden:', e);
+    console.warn('[auth] Reset-Mail fehlgeschlagen:', e);
     return false;
   }
 }

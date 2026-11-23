@@ -48,7 +48,7 @@ export function AuthPage() {
   };
 
   return (
-    <div className="app flex min-h-screen flex-col items-center justify-center px-4 py-10">
+    <div className="app auth-seite">
       <div className="w-full max-w-[420px]">
         <div className="mb-6 flex flex-col items-center text-center">
           <span className="app-brand__mark h-12 w-12">
