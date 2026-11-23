@@ -159,11 +159,7 @@ export function App() {
         </div>
       }
     >
-      {route.name === 'week' ? (
-        page
-      ) : (
-        <div className="app-container pb-16 pt-6">{page}</div>
-      )}
+      <div className="app-container pb-16 pt-6">{page}</div>
     </AppShell>
   );
 }
