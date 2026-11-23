@@ -240,7 +240,16 @@ const TOOLS: Array<Record<string, unknown>> = [
         '(z. B. weniger Fleisch, saisonales Gemüse, Hülsenfrüchte statt Fleisch). ' +
         'Gewürze und Grundausstattung wie Öl, Salz, Essig haben keinen Preis, ' +
         'weil man sie zu Hause hat.',
-      parameters: { type: 'object', properties: {} },
+      parameters: {
+        type: 'object',
+        properties: {
+          woche_ab: {
+            type: 'string',
+            description:
+              'Optional: Montag der Woche als YYYY-MM-DD. Ohne Angabe die laufende Woche.',
+          },
+        },
+      },
     },
   },
   {
@@ -561,12 +570,15 @@ async function toolFavorite(ctx: Ctx, a: Record<string, unknown>) {
   return { ok: true, favorit: Boolean(a.favorit) };
 }
 
-async function toolShoppingRead(ctx: Ctx) {
+async function toolShoppingRead(ctx: Ctx, a: Record<string, unknown> = {}) {
   if (!ctx.householdId) return { fehler: 'Du bist in keinem Haushalt.' };
+  // Optional eine andere Woche lesen — ohne Angabe die laufende.
+  const gewuenscht = String(a.woche_ab ?? '').trim();
+  const weekStart = /^\d{4}-\d{2}-\d{2}$/.test(gewuenscht) ? gewuenscht : mondayOf();
   const rows = await pool.query<{ name: string; amount: string | null; unit: string; checked: boolean; category: string }>(
     `SELECT name, amount, unit, checked, category FROM shopping_items
       WHERE household_id = $1 AND week_start = $2 ORDER BY name`,
-    [ctx.householdId, mondayOf()],
+    [ctx.householdId, weekStart],
   );
   // Preise mitgeben, damit der Assistent bei "zu teuer" selbst rechnen kann,
   // welche Zutaten den Ausschlag geben und welche Rezepte guenstiger waeren.
@@ -580,6 +592,7 @@ async function toolShoppingRead(ctx: Ctx) {
   // Die teuersten Positionen zuerst — dort lohnt Sparen am meisten.
   const teuerste = [...offen].sort((a, b) => (b.euro ?? 0) - (a.euro ?? 0)).slice(0, 8);
   return {
+    woche_ab: weekStart,
     anzahl: rows.rowCount,
     geschaetzte_summe_euro: summe,
     teuerste_positionen: teuerste,

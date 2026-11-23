@@ -6,6 +6,16 @@
  * (Stand Ende 2026), pro Kilogramm, Liter oder Stück. Daraus wird über die Menge
  * der Wochenpreis gerechnet.
  *
+ * Abgleich: Die Eckwerte wurden am 23.11.2026 gegen veröffentlichte Aldi-Süd-Preise
+ * geprüft — Kartoffeln 0,92 €/kg, Spaghetti 1,19 €/kg, passierte Tomaten 1,30 €/kg,
+ * Tomaten 2,98 €/kg, Milch 0,95 €/l, Hähnchenbrust 13,73 €/kg.
+ *
+ * WICHTIG — was das nicht ist: keine Live-Anbindung an eine Preisdatenbank. Die
+ * Tabelle ist statisch und liegt bewusst etwas über Discounter-Niveau, weil
+ * Markenprodukte und kleinere Packungen teurer sind. Reale Abweichung gegenüber
+ * der Kasse: grob ±20 %. Für „ist die Woche zu teuer?" reicht das, für eine
+ * Haushaltsabrechnung nicht.
+ *
  * Gewürze, Saucen und Grundausstattung bekommen **bewusst keinen Preis**: Salz,
  * Pfeffer, Oregano oder Sojasauce hat man zu Hause und kauft sie nicht wöchentlich.
  * Sie würden die Summe jede Woche künstlich aufblähen. Sie landen in der Kategorie
@@ -67,13 +77,13 @@ const PREISE: Array<{ wort: string; preis: Preis }> = [
   { wort: 'vanillezucker', preis: { label: 'Backzutat' } },
 
   // ── Obst & Gemüse ────────────────────────────────────────────────────────
-  { wort: 'kartoffel', preis: { proKg: 1.29, label: 'kg' } },
+  { wort: 'kartoffel', preis: { proKg: 0.92, label: 'kg' } },
   { wort: 'süßkartoffel', preis: { proKg: 2.49, label: 'kg' } },
   { wort: 'zwiebel', preis: { proKg: 1.49, label: 'kg' } },
   { wort: 'frühlingszwiebel', preis: { proKg: 3.99, label: 'Bund' } },
   { wort: 'knoblauch', preis: { proKg: 7.99, label: 'kg' } },
-  { wort: 'tomate', preis: { proKg: 2.79, label: 'kg' } },
-  { wort: 'passierte tomate', preis: { proKg: 1.98, label: 'Packung' } },
+  { wort: 'tomate', preis: { proKg: 2.98, label: 'kg' } },
+  { wort: 'passierte tomate', preis: { proKg: 1.30, label: 'Packung' } },
   { wort: 'dosentomate', preis: { proKg: 1.78, label: 'Dose' } },
   { wort: 'gurke', preis: { proStueck: 1.09, label: 'Stück' } },
   { wort: 'paprika', preis: { proKg: 4.49, label: 'kg' } },
@@ -120,7 +130,7 @@ const PREISE: Array<{ wort: string; preis: Preis }> = [
   { wort: 'kapern', preis: { proKg: 15.9, label: 'Glas' } },
 
   // ── Milchprodukte & Eier ─────────────────────────────────────────────────
-  { wort: 'milch', preis: { proL: 1.29, label: 'l' } },
+  { wort: 'milch', preis: { proL: 0.95, label: 'l' } },
   { wort: 'kokosmilch', preis: { proKg: 3.33, label: 'Dose' } },
   { wort: 'butter', preis: { proKg: 9.16, label: 'kg' } },
   { wort: 'sahne', preis: { proL: 7.45, label: 'Becher' } },
@@ -148,9 +158,9 @@ const PREISE: Array<{ wort: string; preis: Preis }> = [
   // ── Fleisch & Fisch ──────────────────────────────────────────────────────
   { wort: 'hackfleisch', preis: { proKg: 11.98, label: 'kg' } },
   { wort: 'hack', preis: { proKg: 11.98, label: 'kg' } },
-  { wort: 'hähnchen', preis: { proKg: 12.48, label: 'kg' } },
-  { wort: 'hühnchen', preis: { proKg: 12.48, label: 'kg' } },
-  { wort: 'huhn', preis: { proKg: 12.48, label: 'kg' } },
+  { wort: 'hähnchen', preis: { proKg: 13.73, label: 'kg' } },
+  { wort: 'hühnchen', preis: { proKg: 13.73, label: 'kg' } },
+  { wort: 'huhn', preis: { proKg: 13.73, label: 'kg' } },
   { wort: 'pute', preis: { proKg: 11.9, label: 'kg' } },
   { wort: 'rind', preis: { proKg: 19.9, label: 'kg' } },
   { wort: 'schwein', preis: { proKg: 9.9, label: 'kg' } },
@@ -185,10 +195,10 @@ const PREISE: Array<{ wort: string; preis: Preis }> = [
   { wort: 'kuchen', preis: { proKg: 8.9, label: 'kg' } },
 
   // ── Nudeln, Reis & Vorrat ────────────────────────────────────────────────
-  { wort: 'nudel', preis: { proKg: 2.38, label: 'kg' } },
-  { wort: 'pasta', preis: { proKg: 2.38, label: 'kg' } },
-  { wort: 'spaghetti', preis: { proKg: 2.38, label: 'kg' } },
-  { wort: 'penne', preis: { proKg: 2.38, label: 'kg' } },
+  { wort: 'nudel', preis: { proKg: 1.19, label: 'kg' } },
+  { wort: 'pasta', preis: { proKg: 1.19, label: 'kg' } },
+  { wort: 'spaghetti', preis: { proKg: 1.19, label: 'kg' } },
+  { wort: 'penne', preis: { proKg: 1.19, label: 'kg' } },
   { wort: 'reis', preis: { proKg: 1.99, label: 'kg' } },
   { wort: 'couscous', preis: { proKg: 4.49, label: 'kg' } },
   { wort: 'bulgur', preis: { proKg: 3.49, label: 'kg' } },
