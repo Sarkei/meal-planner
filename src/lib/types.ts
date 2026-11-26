@@ -189,7 +189,9 @@ export type UserSettings = {
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  theme: 'system',
+  // Standard dunkel: Tim wollte alle Apps standardmäßig im Darkmode. 'system' würde auf
+  // einem hell eingerichteten Rechner die App hell starten.
+  theme: 'dark',
   defaultServings: 2,
   diets: [],
   allergies: [],

@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId] = useState<string | null>(localStorage.getItem(ACTIVE_KEY));
   const [settings, setSettings] = useState<UserSettings>(() => {
     const stored = localStorage.getItem(THEME_KEY) as UserSettings['theme'] | null;
-    return { ...DEFAULT_SETTINGS, theme: stored ?? 'system' };
+    return { ...DEFAULT_SETTINGS, theme: stored ?? 'dark' };
   });
   const [loading, setLoading] = useState(true);
 

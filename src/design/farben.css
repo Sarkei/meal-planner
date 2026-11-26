@@ -1,0 +1,108 @@
+/* ==========================================================================
+   farben.css — ERZEUGT aus kit/paletten.json. Nicht hier ändern!
+
+   App:        Mealplanner
+   Charakter:  Safran · warm, Küche, Holz
+   Dichte:     normal (Radius 12px)
+
+   Änderung: kit/paletten.json bearbeiten, dann
+       python3 kit/build.py mealplanner --nach <projektordner>
+   ========================================================================== */
+
+:root {
+  /* --- Akzent (Marke der App) ------------------------------------------ */
+  --accent: #d9a94e;
+  --accent-hover: #e6bd6c;
+  --accent-soft: rgb(217 169 78 / 0.15);
+  --accent-ink: #f2dcae;
+  --on-accent: #1a1206;
+
+  /* --- Status (in jeder App gleich, damit Warnungen nicht verwirren) --- */
+  --danger: #f08a7a;
+  --danger-soft: rgb(240 138 122 / 0.14);
+  --warn: #e8b25f;
+  --warn-soft: rgb(232 178 95 / 0.14);
+  --success: #63c79a;
+  --success-soft: rgb(99 199 154 / 0.14);
+
+  /* --- Form: Radius aus der Palette, Dichte aus dem Charakter ---------- */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --karte-padding: 20px;
+  --sektion-abstand: 32px;
+  --hero-abstand: 40px;
+  --ziel-hoehe: 38px;
+  --titel-groesse: clamp(25px, 4vw, 34px);
+  --stat-groesse: 26px;
+  --raster-abstand: 14px;
+
+  /* --- Schrift --------------------------------------------------------- */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  --font-zahlen: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  color-scheme: dark;
+}
+
+/* --- DUNKEL: Standard ------------------------------------------------
+   `.dark` ist mit aufgeführt, weil ältere Apps den Darkmode über eine Klasse am
+   <html>-Element schalten statt über data-theme. Ohne diesen Selektor bleiben sie im
+   hellen Standard hängen, obwohl sie dunkel wollen. */
+[data-theme='dark'],
+.dark,
+:root:not([data-theme='light']) {
+  --bg: #16120d;
+  --surface: #221b13;
+  --surface-2: #2a2218;
+  --surface-3: #332a1e;
+
+  --ink: #e9edeb;
+  --muted: #a4aaa7;
+  --placeholder: #7b807d;
+
+  --line: #2b2f2d;
+  --line-strong: #383c3a;
+
+  color-scheme: dark;
+}
+
+/* --- HELL ------------------------------------------------------------ */
+[data-theme='light'],
+.light:not(.dark) {
+  --bg: #f7f4ee;
+  --surface: #ffffff;
+  --surface-2: #edeae4;
+  --surface-3: #e3e0da;
+
+  --ink: #121a16;
+  --muted: #55635c;
+  --placeholder: #8a978f;
+
+  --line: #dde3df;
+  --line-strong: #c6cfc9;
+
+  --accent: #9c7420;
+  --accent-hover: #825f19;
+  --accent-soft: #0f0b03;
+  --accent-ink: #36280b;
+  --on-accent: #ffffff;
+
+  color-scheme: light;
+}
+
+/* --- Aliasse für vorhandene Komponenten ------------------------------ */
+:root {
+  --background: var(--bg);
+  --card-bg: var(--surface);
+  --card: var(--surface);
+  --panel: var(--surface);
+  --foreground: var(--ink);
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --border: var(--line);
+  --brand: var(--accent);
+  --primary: var(--accent);
+}
