@@ -1,7 +1,14 @@
 import { Router, type Response } from 'express';
 import { pool } from './db';
 import { verifyToken } from './auth';
-import { sendeEreignis } from './push-route';
+import { benachrichtige } from './benachrichtigungen';
+import { sendePushAnNutzer } from './push-route';
+
+/** Versand an einen Nutzer in der Form, die `benachrichtige` erwartet. */
+const sendeAn =
+  (nutzerId: number) =>
+  (n: { titel: string; text: string; url?: string; tag?: string; dringend?: boolean }) =>
+    sendePushAnNutzer(pool, nutzerId, n);
 
 /**
  * Server-Sent Events pro Haushalt: Die App abonniert einen Strom und lädt bei Änderungen nach.
@@ -75,7 +82,10 @@ async function benachrichtigeHaushalt(
       // Jede Änderung nur einmal pro Minute und Typ melden — sonst kommt bei
       // einem Plan-Lauf mit 7 Tagen sieben Nachrichten.
       const schluessel = `${type}-${Math.floor(Date.now() / 60_000)}`;
-      void sendeEreignis(pool as never, g.user_id, `haushalt-${type}`, schluessel, {
+      void benachrichtige(pool as never, sendeAn(g.user_id), g.user_id, {
+        kategorie: 'plan',
+        ereignis: `haushalt-${type}`,
+        schluessel,
         titel: m.titel,
         text: m.text,
         url: 'https://meal-planner.nas-timgreen.com/',

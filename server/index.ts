@@ -18,6 +18,7 @@ import { foodRouter } from './food';
 import { eventsRouter } from './events';
 import { pushoverRouter } from './pushover-route';
 import { pushRouter } from './push-route';
+import { benachrichtigungsRouter } from './benachrichtigungen';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -71,6 +72,13 @@ app.use(
   '/api/push',
   attachUserFromToken,
   pushRouter(pool as never, (req) => (req as { userId?: number }).userId ?? null, 'Meal Planner'),
+);
+
+/* Kategorien, Ruhezeit und Verlauf der Benachrichtigungen. */
+app.use(
+  '/api/benachrichtigungen',
+  attachUserFromToken,
+  benachrichtigungsRouter(pool as never, (req) => (req as { userId?: number }).userId ?? null),
 );
 
 app.use('/api/households', requireAuth, householdsRouter);

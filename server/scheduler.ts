@@ -3,6 +3,17 @@ import { loadHouseholdPreferences } from './householdPrefs';
 import { loadPlan } from './plans';
 import { planWeekForUser } from './ai';
 import { broadcast } from './events';
+import { benachrichtige } from './benachrichtigungen';
+import { sendePushAnNutzer } from './push-route';
+
+/** Versand an einen Nutzer in der Form, die `benachrichtige` erwartet. */
+const sendeAn =
+  (nutzerId: number) =>
+  (n: { titel: string; text: string; url?: string; tag?: string; dringend?: boolean }) =>
+    sendePushAnNutzer(pool, nutzerId, n);
+
+/** Einstiegsseite der App — alle Meldungen verlinken dorthin. */
+const APP_URL = 'https://meal-planner.nas-timgreen.com/';
 
 /**
  * Freitags-Vorbau: Am Freitagmorgen bekommt jeder Haushalt die Folgewoche geplant,
@@ -140,6 +151,42 @@ async function runFridayPlanning(): Promise<number> {
       broadcast(hh.id, 'plan');
       planned += 1;
       console.log(`📅 Woche ${nextWeek} für Haushalt ${hh.id} vorgebaut`);
+
+      /*
+       * Meldung an alle im Haushalt: „die nächste Woche steht".
+       * Das ist der Moment, in dem eingekauft werden will — bisher erfuhr es
+       * nur, wer zufällig in die App schaute.
+       */
+      try {
+        const mitglieder = await pool.query<{ user_id: number }>(
+          'SELECT user_id FROM household_members WHERE household_id = $1',
+          [hh.id],
+        );
+        const eintraege = await pool.query<{ n: string }>(
+          `SELECT COUNT(*)::text AS n FROM plan_entries pe
+             JOIN meal_plans p ON p.id = pe.plan_id
+            WHERE p.household_id = $1 AND p.week_start = $2::date`,
+          [hh.id, nextWeek],
+        );
+        const anzahl = Number(eintraege.rows[0]?.n ?? 0);
+        const woche = new Date(`${nextWeek}T00:00:00Z`).toLocaleDateString('de-DE', {
+          day: 'numeric', month: 'long', timeZone: 'UTC',
+        });
+        for (const m of mitglieder.rows) {
+          await benachrichtige(pool, sendeAn(m.user_id), m.user_id, {
+            kategorie: 'plan',
+            ereignis: 'wochenplan-fertig',
+            schluessel: nextWeek,
+            titel: 'Nächste Woche ist geplant',
+            text: `${anzahl} Mahlzeiten ab ${woche}. Die Einkaufsliste ist vollständig.`,
+            url: `${APP_URL}#/week`,
+            tag: 'plan-fertig',
+            rhythmus: 'morgen',
+          });
+        }
+      } catch (e) {
+        console.error('[push] Meldung zum Wochenplan:', (e as Error).message);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 300) : 'unbekannt';
       console.error(`Vorbau für ${hh.id} fehlgeschlagen:`, message);
@@ -153,6 +200,125 @@ async function runFridayPlanning(): Promise<number> {
   return planned;
 }
 
+/**
+ * Täglicher Takt: Abendessen, Einkauf, Wochenstart.
+ *
+ * Der Mealplanner meldete bis 26.11. nur, wenn *jemand anders* etwas geändert
+ * hatte. Wer allein plant, hörte nie etwas. Diese drei Meldungen schließen das:
+ *
+ *  - **Abendessen** (17–20 Uhr): was heute auf dem Plan steht.
+ *  - **Einkauf** (Sa 9–12 Uhr): wie viel für die nächste Woche offen ist.
+ *  - **Wochenstart** (So 17–20 Uhr): was geplant ist, plus offene Einkäufe.
+ */
+async function runDailyMessages(): Promise<number> {
+  const { hour, ymd } = berlinNow();
+  const wochentag = new Date(`${ymd}T12:00:00Z`).getUTCDay(); // 0 = Sonntag
+  let gesendet = 0;
+
+  const haushalte = await pool.query<{ id: string; user_id: number }>(
+    'SELECT household_id AS id, user_id FROM household_members',
+  );
+  if (!haushalte.rowCount) return 0;
+
+  // Montag dieser Woche (day_index 0) und Montag der kommenden.
+  const montag = new Date(`${ymd}T00:00:00Z`);
+  montag.setUTCDate(montag.getUTCDate() - ((montag.getUTCDay() + 6) % 7));
+  const dieserMontag = montag.toISOString().slice(0, 10);
+  const naechsterMontag = new Date(montag.getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const heuteIndex = Math.round(
+    (new Date(`${ymd}T00:00:00Z`).getTime() - montag.getTime()) / 86_400_000,
+  );
+
+  for (const m of haushalte.rows) {
+    try {
+      /* ---- a) Abendessen heute ---- */
+      if (hour >= 17 && hour <= 20) {
+        const heute = await pool.query<{ slot: string; titel: string | null; eigen: string | null }>(
+          `SELECT pe.slot, r.title AS titel, pe.custom_title AS eigen
+             FROM plan_entries pe
+             JOIN meal_plans p ON p.id = pe.plan_id
+             LEFT JOIN recipes r ON r.id = pe.recipe_id
+            WHERE p.household_id = $1 AND p.week_start = $2::date AND pe.day_index = $3
+            ORDER BY pe.position`,
+          [m.id, dieserMontag, heuteIndex],
+        );
+        const abend = heute.rows.filter((x) => /abend|dinner/i.test(x.slot));
+        const gerichte = abend.map((x) => x.titel ?? x.eigen).filter(Boolean) as string[];
+        if (gerichte.length) {
+          const geschickt = await benachrichtige(pool, sendeAn(m.user_id), m.user_id, {
+            kategorie: 'ernaehrung',
+            ereignis: 'abendessen',
+            schluessel: ymd,
+            titel: 'Heute Abend',
+            text: `${gerichte.join(' · ')}. Zutaten stehen in der Einkaufsliste.`,
+            url: APP_URL,
+            tag: 'abendessen',
+            rhythmus: 'abend',
+          });
+          if (geschickt) gesendet += 1;
+        }
+      }
+
+      /* ---- b) Einkauf am Samstag ---- */
+      if (wochentag === 6 && hour >= 9 && hour <= 12) {
+        const liste = await pool.query<{ offen: string }>(
+          `SELECT COUNT(*) FILTER (WHERE checked IS NOT TRUE)::text AS offen
+             FROM shopping_items WHERE household_id = $1 AND week_start = $2::date`,
+          [m.id, naechsterMontag],
+        );
+        const offen = Number(liste.rows[0]?.offen ?? 0);
+        if (offen > 0) {
+          const geschickt = await benachrichtige(pool, sendeAn(m.user_id), m.user_id, {
+            kategorie: 'plan',
+            ereignis: 'einkauf-samstag',
+            schluessel: ymd,
+            titel: 'Einkauf steht an',
+            text: `${offen} ${offen === 1 ? 'Sache' : 'Sachen'} für die nächste Woche offen.`,
+            url: `${APP_URL}#/shopping`,
+            tag: 'einkauf',
+            rhythmus: 'morgen',
+          });
+          if (geschickt) gesendet += 1;
+        }
+      }
+
+      /* ---- c) Wochenstart am Sonntag ---- */
+      if (wochentag === 0 && hour >= 17 && hour <= 20) {
+        const plan = await pool.query<{ n: string }>(
+          `SELECT COUNT(*)::text AS n FROM plan_entries pe
+             JOIN meal_plans p ON p.id = pe.plan_id
+            WHERE p.household_id = $1 AND p.week_start = $2::date`,
+          [m.id, naechsterMontag],
+        );
+        const anzahl = Number(plan.rows[0]?.n ?? 0);
+        if (anzahl > 0) {
+          const liste = await pool.query<{ offen: string }>(
+            `SELECT COUNT(*) FILTER (WHERE checked IS NOT TRUE)::text AS offen
+               FROM shopping_items WHERE household_id = $1 AND week_start = $2::date`,
+            [m.id, naechsterMontag],
+          );
+          const offen = Number(liste.rows[0]?.offen ?? 0);
+          const geschickt = await benachrichtige(pool, sendeAn(m.user_id), m.user_id, {
+            kategorie: 'plan',
+            ereignis: 'wochenstart',
+            schluessel: naechsterMontag,
+            titel: 'Nächste Woche beginnt',
+            text: `${anzahl} Mahlzeiten geplant${offen > 0 ? `, ${offen} auf der Einkaufsliste offen` : ', Einkauf ist durch'}.`,
+            url: `${APP_URL}#/week`,
+            tag: 'wochenstart',
+            rhythmus: 'abend',
+          });
+          if (geschickt) gesendet += 1;
+        }
+      }
+    } catch (e) {
+      // Ein Haushalt darf den Lauf nicht abbrechen, aber nicht stumm scheitern.
+      console.error('[push] Tagesmeldungen:', (e as Error).message);
+    }
+  }
+  return gesendet;
+}
+
 export function startScheduler() {
   void ensureTable().catch((e) => console.error('Scheduler-Tabelle', e));
   const tick = async () => {
@@ -160,6 +326,11 @@ export function startScheduler() {
       await runFridayPlanning();
     } catch (error) {
       console.error('Scheduler', error);
+    }
+    try {
+      await runDailyMessages();
+    } catch (error) {
+      console.error('Scheduler Tagesmeldungen', error);
     }
   };
   const timer = setInterval(() => void tick(), CHECK_INTERVAL_MS);
